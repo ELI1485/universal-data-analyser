@@ -1,0 +1,170 @@
+"""Report service orchestrating report generation.
+
+Combines analytics, anomaly detection, and LLM insights into
+a PDF or Excel report, then persists the report metadata.
+"""
+
+import logging
+import os
+from pathlib import Path
+
+from models.report import Report
+from repositories.dataset_repository import DatasetRepository
+from repositories.report_repository import ReportRepository
+from services.analytics.analytics_service import analyser
+from services.anomaly.anomaly_service import detecter_toutes
+from services.llm_service import LLMService
+from services.reporting.pdf_generator import generer as generer_pdf
+from services.reporting.excel_generator import generer as generer_excel
+from services.audit_service import log_action, log_error
+
+logger = logging.getLogger(__name__)
+
+_dataset_repo = DatasetRepository()
+_report_repo = ReportRepository()
+
+
+def generer_rapport(dataset_id: int, user_id: int, format: str) -> Report:
+    """Generate a complete report for a dataset.
+
+    Steps:
+    1. Get analytics results
+    2. Get anomaly detection results
+    3. Generate LLM insights
+    4. Call PDF or Excel generator based on format
+    5. Save Report record to database
+    6. Log audit event
+
+    Args:
+        dataset_id: The dataset ID to report on.
+        user_id: The user requesting the report.
+        format: Report format ('pdf' or 'excel').
+
+    Returns:
+        The saved Report ORM object.
+
+    Raises:
+        ValueError: If dataset not found or format is invalid.
+    """
+    if format not in ("pdf", "excel"):
+        raise ValueError(f"Format de rapport invalide: '{format}'. Utilisez 'pdf' ou 'excel'.")
+
+    dataset = _dataset_repo.find_by_id(dataset_id)
+    if not dataset:
+        raise ValueError(f"Dataset avec ID={dataset_id} introuvable.")
+
+    logger.info(
+        "Génération rapport %s pour dataset '%s' (ID=%d)",
+        format.upper(),
+        dataset.nom,
+        dataset_id,
+    )
+
+    try:
+        # Step 1: Get analytics results
+        analytics = analyser(dataset_id)
+
+        # Step 2: Get anomalies
+        anomalies = detecter_toutes(dataset_id)
+
+        # Step 3: Generate LLM insights
+        insights = _generate_insights(dataset, analytics, anomalies)
+
+        # Step 4: Generate report file
+        if format == "pdf":
+            file_path = generer_pdf(dataset_id, user_id, analytics, anomalies, insights)
+        else:
+            file_path = generer_excel(dataset_id, user_id, analytics, anomalies, insights)
+
+        # Step 5: Save report to database
+        file_size_ko = os.path.getsize(file_path) / 1024
+        report = Report(
+            dataset_id=dataset_id,
+            user_id=user_id,
+            format=format,
+            chemin_export=file_path,
+            taille_ko=round(file_size_ko, 2),
+        )
+        saved_report = _report_repo.save(report)
+
+        # Step 6: Log audit
+        log_action(
+            user_id=user_id,
+            action="generer_rapport",
+            entite="report",
+            entite_id=saved_report.id,
+            statut="succes",
+            message=f"Rapport {format.upper()} généré pour dataset '{dataset.nom}'",
+            ip=None,
+        )
+
+        logger.info(
+            "Rapport généré avec succès: ID=%d, format=%s, taille=%.1f Ko",
+            saved_report.id,
+            format,
+            file_size_ko,
+        )
+        return saved_report
+
+    except Exception as e:
+        logger.error("Erreur lors de la génération du rapport: %s", e)
+        log_error(user_id=user_id, action="generer_rapport", error=e, ip=None)
+        raise
+
+
+def _generate_insights(dataset, analytics: dict, anomalies: dict) -> str:
+    """Generate LLM insights from analytics and anomaly data.
+
+    Args:
+        dataset: The Dataset ORM object.
+        analytics: The analytics results dictionary.
+        anomalies: The anomaly detection results.
+
+    Returns:
+        The LLM-generated insights text or fallback message.
+    """
+    try:
+        llm = LLMService()
+
+        # Build context for LLM
+        stats_summary = ""
+        stats_data = analytics.get("statistiques", {}).get("colonnes", {})
+        for col_name, col_stats in list(stats_data.items())[:5]:
+            stats_summary += (
+                f"  {col_name}: moy={col_stats.get('mean')}, "
+                f"méd={col_stats.get('median')}, "
+                f"écart-type={col_stats.get('std')}\n"
+            )
+
+        # Top anomalies
+        all_anom = (
+            anomalies.get("zscore", [])
+            + anomalies.get("iqr", [])
+            + anomalies.get("isolation", [])
+        )
+        all_anom.sort(key=lambda x: x.get("score", 0), reverse=True)
+        top_anomalies = all_anom[:5]
+
+        # Correlations
+        kpis = analytics.get("kpis", {})
+        correlations = kpis.get("top_correlated_pairs", [])
+
+        context = {
+            "dataset_name": dataset.nom,
+            "nb_rows": dataset.nb_lignes,
+            "nb_cols": dataset.nb_colonnes,
+            "stats_summary": stats_summary,
+            "anomalies_count": anomalies.get("total", 0),
+            "top_anomalies": top_anomalies,
+            "correlations": correlations,
+        }
+
+        insights = llm.generer_insights(context)
+        return insights
+
+    except Exception as e:
+        logger.warning("Génération d'insights LLM échouée: %s", e)
+        return (
+            "L'analyse par intelligence artificielle n'est pas disponible. "
+            "Veuillez vérifier la configuration de l'API Gemini."
+        )
