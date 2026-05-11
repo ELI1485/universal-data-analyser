@@ -33,6 +33,7 @@ from views.pyside.login_dialog import LoginDialog
 from views.pyside.upload_widget import UploadWidget
 from views.pyside.analytics_widget import AnalyticsWidget
 from views.pyside.report_widget import ReportWidget
+from views.pyside.admin_widget import AdminWidget
 
 
 class MainWindow(QMainWindow):
@@ -107,6 +108,11 @@ class MainWindow(QMainWindow):
         self._nav_reports = QPushButton("📄 Rapports")
         self._nav_reports.clicked.connect(lambda: self._switch_page(3))
         sidebar_layout.addWidget(self._nav_reports)
+
+        self._nav_admin = QPushButton("⚙️ Administration")
+        self._nav_admin.clicked.connect(lambda: self._switch_page(4))
+        self._nav_admin.setVisible(False)
+        sidebar_layout.addWidget(self._nav_admin)
 
         sidebar_layout.addStretch()
 
@@ -185,6 +191,8 @@ class MainWindow(QMainWindow):
             f"Connecté: {self._nom} ({self._role})"
         )
 
+        self._nav_admin.setVisible(self._role == "admin")
+
         self._sidebar.setVisible(True)
         self._setup_pages()
         self._switch_page(0)
@@ -216,6 +224,11 @@ class MainWindow(QMainWindow):
         # Page 3: Reports
         report_widget = ReportWidget(self._user_id, self._role)
         self._stack.addWidget(report_widget)
+
+        # Page 4: Admin
+        if self._role == "admin":
+            admin_widget = AdminWidget(self._user_id, self._role)
+            self._stack.addWidget(admin_widget)
 
     def _switch_page(self, index: int) -> None:
         """Switch the visible page in the stacked widget.

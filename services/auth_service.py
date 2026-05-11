@@ -6,12 +6,15 @@ and role-based access control.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import bcrypt
 import jwt
 
-from config.settings import JWT_SECRET_KEY, SESSION_TIMEOUT_MINUTES, MAX_LOGIN_ATTEMPTS
+from config.settings import (
+    JWT_SECRET_KEY, 
+    SESSION_TIMEOUT_MINUTES, 
+    MAX_LOGIN_ATTEMPTS
+)
 from repositories.user_repository import UserRepository
 from repositories.audit_repository import AuditRepository
 
@@ -112,6 +115,67 @@ def get_current_user(token: str) -> dict:
     """
     payload = verify_token(token)
     return {"user_id": payload["user_id"], "role": payload["role"]}
+
+
+def signup(nom: str, email: str, password: str, ip: str) -> dict:
+    """Register a new user and return user information.
+
+    Args:
+        nom: The user's full name.
+        email: The user's email address.
+        password: The plain-text password.
+        ip: The client's IP address for audit logging.
+
+    Returns:
+        A dict with the created user's information.
+
+    Raises:
+        ValueError: If the email is already in use or inputs are invalid.
+    """
+    # Check if email is already in use
+    existing_user = _user_repo.find_by_email(email)
+    if existing_user:
+        logger.warning("Tentative d'inscription avec email existant: %s", email)
+        _audit_repo.log(
+            user_id=None,
+            action="signup_echec",
+            entite="user",
+            entite_id=None,
+            statut="erreur",
+            message=f"Email déjà utilisé: {email}",
+            ip_address=ip,
+        )
+        raise ValueError("Cet email est déjà utilisé.")
+
+    # Hash the password
+    password_hash = hash_password(password)
+
+    # Create the user (default role: analyste)
+    user = _user_repo.create(
+        nom=nom,
+        email=email,
+        hashed_password=password_hash,
+        role="analyste",
+    )
+
+    # Log successful signup
+    _audit_repo.log(
+        user_id=user.id,
+        action="signup_succes",
+        entite="user",
+        entite_id=user.id,
+        statut="succes",
+        message=f"Nouvel utilisateur inscrit: {email}",
+        ip_address=ip,
+    )
+    logger.info("Nouvel utilisateur inscrit: %s", email)
+
+    return {
+        "user_id": user.id,
+        "nom": user.nom,
+        "email": user.email,
+        "role": user.role,
+    }
 
 
 def login(email: str, password: str, ip: str) -> str:

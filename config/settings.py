@@ -58,7 +58,7 @@ DB_HOST: str = _get_required("DB_HOST")
 DB_PORT: int = int(_get_optional("DB_PORT", "3306"))
 DB_NAME: str = _get_required("DB_NAME")
 DB_USER: str = _get_required("DB_USER")
-DB_PASSWORD: str = _get_required("DB_PASSWORD")
+DB_PASSWORD: str = _get_optional("DB_PASSWORD", "")
 
 # --- Gemini LLM ---
 LLM_PROVIDER: str = _get_optional("LLM_PROVIDER", "gemini")

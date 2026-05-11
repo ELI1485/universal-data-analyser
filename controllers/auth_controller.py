@@ -48,6 +48,30 @@ class AuthController:
             logger.warning("Login échoué pour %s: %s", email, e)
             raise
 
+    def register(self, nom: str, email: str, password: str, ip: str = "127.0.0.1") -> dict:
+        """Register a new user.
+
+        Args:
+            nom: The user's full name.
+            email: The user's email address.
+            password: The plain-text password.
+            ip: The client's IP address.
+
+        Returns:
+            A dict with user info.
+
+        Raises:
+            ValueError: If registration fails.
+        """
+        try:
+            result = auth_service.signup(nom, email, password, ip)
+            return result
+        except ValueError as e:
+            raise
+        except Exception as e:
+            logger.error("Erreur lors de l'inscription: %s", e)
+            raise ValueError(f"Erreur lors de l'inscription: {str(e)}")
+
     def logout(self, token: str, ip: str = "127.0.0.1") -> None:
         """Log the user out and record the audit event.
 

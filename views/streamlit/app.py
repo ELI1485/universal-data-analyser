@@ -13,6 +13,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import streamlit as st
+st.write("Application démarre...")
 
 from config.logging_config import setup_logging
 from config.settings import LOG_DIR, LOG_LEVEL
@@ -29,6 +30,7 @@ from views.streamlit.upload_page import render as render_upload
 from views.streamlit.analytics_page import render as render_analytics
 from views.streamlit.report_page import render as render_report
 from views.streamlit.admin_page import render as render_admin
+from views.streamlit.signup_page import render as render_signup
 
 
 def main() -> None:
@@ -50,11 +52,14 @@ def main() -> None:
     if "nom" not in st.session_state:
         st.session_state["nom"] = None
     if "current_page" not in st.session_state:
-        st.session_state["current_page"] = "dashboard"
+        st.session_state["current_page"] = "login"
 
     # Route based on authentication
     if not st.session_state["token"]:
-        render_login()
+        if st.session_state["current_page"] == "signup":
+            render_signup()
+        else:
+            render_login()
     else:
         _render_authenticated_app()
 

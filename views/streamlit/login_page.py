@@ -62,6 +62,12 @@ def render() -> None:
             except Exception as e:
                 st.error(f"Erreur inattendue: {str(e)}")
 
+        # Signup link
+        st.markdown("---")
+        if st.button("Pas encore de compte ? S'inscrire"):
+            st.session_state["current_page"] = "signup"
+            st.rerun()
+
         # Help text
         st.markdown("---")
         st.markdown(
