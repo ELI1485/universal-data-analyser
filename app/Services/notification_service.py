@@ -104,7 +104,7 @@ class NotificationService:
         Returns:
             True if sent successfully.
         """
-        subject = f"⚠️ UDA — {anomaly_count} anomalies détectées dans '{dataset_name}'"
+        subject = f"UDA — {anomaly_count} anomalies detectees dans '{dataset_name}'"
 
         anomalies_html = ""
         for a in top_anomalies[:5]:
@@ -120,7 +120,7 @@ class NotificationService:
         html_body = f"""
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #93DC5C, #6db33f); padding: 30px; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">⚠️ Alerte Anomalies</h1>
+                <h1 style="color: white; margin: 0; font-size: 24px;">Alerte Anomalies</h1>
                 <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0;">Universal Data Analyzer</p>
             </div>
             <div style="background: white; padding: 30px; border: 1px solid #eee; border-radius: 0 0 12px 12px;">
@@ -171,27 +171,27 @@ class NotificationService:
         Returns:
             True if sent successfully.
         """
-        subject = f"📊 UDA — Rapport {report_format.upper()} prêt pour '{dataset_name}'"
+        subject = f"UDA — Rapport {report_format.upper()} pret pour '{dataset_name}'"
 
         html_body = f"""
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #93DC5C, #6db33f); padding: 30px; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">📊 Rapport prêt</h1>
+                <h1 style="color: white; margin: 0; font-size: 24px;">Rapport pret</h1>
                 <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0;">Universal Data Analyzer</p>
             </div>
             <div style="background: white; padding: 30px; border: 1px solid #eee; border-radius: 0 0 12px 12px;">
                 <p style="color: #333;">Bonjour,</p>
                 <p style="color: #333;">
                     Votre rapport <strong>{report_format.upper()}</strong> pour le dataset
-                    <strong>"{dataset_name}"</strong> a été généré avec succès.
+                    <strong>"{dataset_name}"</strong> a ete genere avec succes.
                 </p>
                 <div style="background: #f0fdf4; border-left: 4px solid #93DC5C; padding: 15px; margin: 20px 0; border-radius: 4px;">
                     <p style="color: #333; margin: 0;">
-                        ✅ Le rapport est prêt à être téléchargé depuis votre espace UDA.
+                        Le rapport est pret a etre telecharge depuis votre espace UDA.
                     </p>
                 </div>
                 <p style="color: #666; font-size: 13px;">
-                    Connectez-vous à UDA pour télécharger votre rapport.
+                    Connectez-vous a UDA pour telecharger votre rapport.
                 </p>
             </div>
         </div>
@@ -208,31 +208,31 @@ class NotificationService:
         Returns:
             True if sent successfully.
         """
-        subject = "🎉 Bienvenue sur Universal Data Analyzer!"
+        subject = "Bienvenue sur Universal Data Analyzer"
 
         html_body = f"""
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #93DC5C, #6db33f); padding: 30px; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">🎉 Bienvenue!</h1>
+                <h1 style="color: white; margin: 0; font-size: 24px;">Bienvenue</h1>
                 <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0;">Universal Data Analyzer</p>
             </div>
             <div style="background: white; padding: 30px; border: 1px solid #eee; border-radius: 0 0 12px 12px;">
                 <p style="color: #333;">Bonjour <strong>{nom}</strong>,</p>
                 <p style="color: #333;">
-                    Votre compte a été créé avec succès sur Universal Data Analyzer.
+                    Votre compte a ete cree avec succes sur Universal Data Analyzer.
                 </p>
                 <h3 style="color: #333; border-bottom: 2px solid #93DC5C; padding-bottom: 8px;">
                     Ce que vous pouvez faire
                 </h3>
                 <ul style="color: #333; line-height: 2;">
-                    <li>📁 Importer des fichiers CSV/Excel</li>
-                    <li>📊 Lancer des analyses statistiques et détection d'anomalies</li>
-                    <li>🤖 Obtenir des insights IA via Gemini</li>
-                    <li>📜 Générer des rapports PDF/Excel professionnels</li>
-                    <li>🔍 Comparer des versions de datasets</li>
+                    <li>Importer des fichiers CSV/Excel</li>
+                    <li>Lancer des analyses statistiques et detection d'anomalies</li>
+                    <li>Obtenir des insights IA via Gemini</li>
+                    <li>Generer des rapports PDF/Excel professionnels</li>
+                    <li>Comparer des versions de datasets</li>
                 </ul>
                 <p style="color: #666; font-size: 13px; margin-top: 20px;">
-                    Connectez-vous dès maintenant pour commencer!
+                    Connectez-vous des maintenant pour commencer.
                 </p>
             </div>
         </div>

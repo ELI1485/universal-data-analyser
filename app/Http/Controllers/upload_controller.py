@@ -43,6 +43,54 @@ class UploadController:
             log_error(user_id=user_id, action="importer_fichier", error=e, ip=None)
             raise
 
+    def importer_fichiers(
+        self,
+        fichiers: list[tuple[str, str]],
+        user_id: int,
+    ) -> dict[str, list]:
+        """Import a batch of files in one call.
+
+        Each file is processed independently — a failure on one file does
+        not abort the rest of the batch. The caller receives a summary
+        with per-file successes and failures.
+
+        Args:
+            fichiers: List of ``(fichier_path, nom)`` tuples.
+            user_id: ID of the uploading user.
+
+        Returns:
+            A dictionary with two keys:
+            - ``"successes"``: list of saved ``Dataset`` objects.
+            - ``"failures"``: list of ``{"nom", "fichier_path", "error"}`` dicts.
+        """
+        successes: list[Dataset] = []
+        failures: list[dict] = []
+
+        logger.info(
+            "Import batch: %d fichier(s) demande(s) par user_id=%d",
+            len(fichiers),
+            user_id,
+        )
+
+        for fichier_path, nom in fichiers:
+            try:
+                dataset = self.importer_fichier(fichier_path, nom, user_id)
+                successes.append(dataset)
+            except Exception as e:
+                failures.append({
+                    "nom": nom,
+                    "fichier_path": fichier_path,
+                    "error": str(e),
+                })
+
+        logger.info(
+            "Import batch termine: %d succes, %d echecs (sur %d)",
+            len(successes),
+            len(failures),
+            len(fichiers),
+        )
+        return {"successes": successes, "failures": failures}
+
     def lister_datasets(self, user_id: int, role: str) -> list[Dataset]:
         """List datasets accessible to the user.
 

@@ -2,19 +2,37 @@
 
 Supports Gemini (default) as the LLM provider. Generates analytical
 insights in French based on dataset context.
+
+This module is deliberately verbose with its error reporting: when the
+service is unavailable, the precise reason (missing API key, missing
+``google-generativeai`` package, model rejected, network error, etc.)
+is captured on the instance and surfaced through the public API. The
+old behaviour of swallowing all errors behind a generic French message
+hid actionable diagnostics.
 """
 
-import logging
-from typing import Optional
+from __future__ import annotations
 
-from config.settings import LLM_PROVIDER, GEMINI_API_KEY, LLM_MODEL, LLM_TEMPERATURE
+import logging
+
+from config.settings import (
+    LLM_PROVIDER,
+    GEMINI_API_KEY,
+    LLM_MODEL,
+    LLM_TEMPERATURE,
+    LLM_MAX_TOKENS,
+)
 
 logger = logging.getLogger(__name__)
 
-_FALLBACK_MESSAGE = (
-    "L'analyse par intelligence artificielle n'est pas disponible pour le moment. "
-    "Veuillez réessayer ultérieurement ou vérifier la configuration de l'API."
-)
+
+class LLMUnavailableError(RuntimeError):
+    """Raised internally when an LLM call cannot be made.
+
+    The string representation is suitable for showing to operators and
+    contains the real underlying cause (missing key, missing module,
+    invalid model, etc.).
+    """
 
 
 class LLMService:
@@ -22,89 +40,186 @@ class LLMService:
 
     Uses the Gemini API (Google Generative AI) by default to generate
     French-language analytical insights from dataset statistics.
+
+    Public surface:
+        - ``generer_insights(context)`` -> str. Returns either the LLM
+          output or, when the service is unavailable, a clear French
+          fallback message that **includes the real reason** so it can
+          be debugged from the UI/logs.
+        - ``test_connection()`` -> tuple[bool, str]. Returns
+          ``(success, error_message)``. ``error_message`` is empty
+          when the connection succeeds.
+        - ``is_available`` (property) -> bool.
+        - ``last_error`` (property) -> str. The latest captured init or
+          call error, or an empty string when none.
     """
 
     def __init__(self) -> None:
-        """Initialize the LLM service based on configured provider."""
+        """Initialize the LLM service based on the configured provider."""
         self._model = None
         self._initialized = False
+        self._last_error: str = ""
 
-        provider = LLM_PROVIDER.lower()
-        if provider == "gemini":
-            self._init_gemini()
-        else:
-            logger.warning("Fournisseur LLM inconnu: '%s'. Utilisation de gemini.", provider)
-            self._init_gemini()
-
-    def _init_gemini(self) -> None:
-        """Initialize the Google Gemini API client."""
-        if not GEMINI_API_KEY or GEMINI_API_KEY == "your-gemini-api-key":
+        provider = (LLM_PROVIDER or "gemini").lower().strip()
+        if provider != "gemini":
             logger.warning(
-                "Clé API Gemini non configurée. Le service LLM sera indisponible."
+                "Fournisseur LLM inconnu: '%s'. Utilisation de gemini.", provider
             )
+        self._init_gemini()
+
+    # ------------------------------------------------------------------
+    # Initialisation
+    # ------------------------------------------------------------------
+    def _init_gemini(self) -> None:
+        """Initialize the Google Gemini API client.
+
+        On failure the precise reason is recorded in ``self._last_error``
+        rather than being silently swallowed.
+        """
+        # 1. Check for the API key
+        if not GEMINI_API_KEY or GEMINI_API_KEY.strip() in (
+            "",
+            "your-gemini-api-key",
+            "your-api-key",
+        ):
+            self._last_error = (
+                "Cle API Gemini manquante. Definissez GEMINI_API_KEY "
+                "(ou GOOGLE_API_KEY) dans le fichier .env."
+            )
+            logger.warning("Service LLM non initialise: %s", self._last_error)
             return
 
+        # 2. Check the SDK is installed
         try:
-            import google.generativeai as genai
+            import google.generativeai as genai  # type: ignore[import-not-found]
+        except ImportError as e:
+            self._last_error = (
+                "Module 'google-generativeai' introuvable. Installez-le avec "
+                "`pip install google-generativeai>=0.7.0` "
+                f"(detail: {e})."
+            )
+            logger.error("Service LLM non initialise: %s", self._last_error)
+            return
+        except Exception as e:  # pragma: no cover - defensive
+            self._last_error = f"Erreur d'import google-generativeai: {e}"
+            logger.error("Service LLM non initialise: %s", self._last_error)
+            return
 
+        # 3. Configure the SDK and instantiate the model
+        try:
             genai.configure(api_key=GEMINI_API_KEY)
             self._model = genai.GenerativeModel(
                 model_name=LLM_MODEL,
                 generation_config={
                     "temperature": LLM_TEMPERATURE,
-                    "max_output_tokens": 1000,
+                    "max_output_tokens": LLM_MAX_TOKENS,
                 },
             )
             self._initialized = True
-            logger.info("Service LLM Gemini initialisé avec modèle: %s", LLM_MODEL)
+            self._last_error = ""
+            logger.info(
+                "Service LLM Gemini initialise avec modele: %s", LLM_MODEL
+            )
         except Exception as e:
-            logger.error("Erreur d'initialisation du service Gemini: %s", e)
+            self._last_error = (
+                f"Echec d'initialisation du modele Gemini '{LLM_MODEL}': "
+                f"{type(e).__name__}: {e}"
+            )
+            logger.error("Service LLM non initialise: %s", self._last_error)
             self._initialized = False
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    @property
+    def is_available(self) -> bool:
+        """``True`` when a Gemini call can be attempted."""
+        return self._initialized and self._model is not None
+
+    @property
+    def last_error(self) -> str:
+        """The most recent init or call error, or an empty string."""
+        return self._last_error
+
     def generer_insights(self, context: dict) -> str:
-        """Generate analytical insights from dataset context.
+        """Generate analytical insights from a dataset context.
 
         Args:
-            context: A dictionary containing dataset information:
-                - dataset_name: Name of the dataset
-                - nb_rows: Number of rows
-                - nb_cols: Number of columns
-                - stats_summary: Summary of descriptive statistics
-                - anomalies_count: Total number of anomalies found
-                - top_anomalies: List of most significant anomalies
-                - correlations: Notable correlations between variables
+            context: A dictionary with at least:
+                - ``dataset_name``, ``nb_rows``, ``nb_cols``
+                - ``stats_summary``, ``anomalies_count``, ``top_anomalies``
+                - ``correlations``
 
         Returns:
-            A French-language string containing the AI-generated insights,
-            or a fallback message if the API is unavailable.
+            A French-language string with the AI insights, or — when the
+            service is unavailable — a fallback message that **includes
+            the real reason** so the bug can be debugged.
         """
-        if not self._initialized or self._model is None:
-            logger.warning("Service LLM non initialisé, retour du message par défaut.")
-            return _FALLBACK_MESSAGE
+        if not self.is_available:
+            return self._fallback_message()
 
         prompt = self._build_prompt(context)
 
         try:
-            response = self._model.generate_content(prompt)
-            if response and response.text:
-                logger.info("Insights IA générés avec succès.")
+            response = self._model.generate_content(prompt)  # type: ignore[union-attr]
+            if response and getattr(response, "text", None):
+                logger.info("Insights IA generes avec succes.")
                 return response.text
-            else:
-                logger.warning("Réponse LLM vide.")
-                return _FALLBACK_MESSAGE
+
+            self._last_error = (
+                "La reponse de Gemini est vide. Verifiez les filtres de "
+                "securite ou le quota du modele."
+            )
+            logger.warning(self._last_error)
+            return self._fallback_message()
         except Exception as e:
-            logger.error("Erreur lors de la génération d'insights IA: %s", e)
-            return _FALLBACK_MESSAGE
+            self._last_error = (
+                f"Erreur lors de l'appel Gemini: {type(e).__name__}: {e}"
+            )
+            logger.error(self._last_error)
+            return self._fallback_message()
 
-    def _build_prompt(self, context: dict) -> str:
-        """Build a detailed French prompt for analytical insight generation.
-
-        Args:
-            context: The dataset context dictionary.
+    def test_connection(self) -> tuple[bool, str]:
+        """Test the Gemini API connection.
 
         Returns:
-            A formatted prompt string in French.
+            ``(True, "")`` when the call succeeds, otherwise
+            ``(False, error_message)`` with a French-language reason.
         """
+        if not self.is_available:
+            return False, self._last_error or "Service LLM non initialise."
+
+        try:
+            response = self._model.generate_content("Dis 'OK' en un mot.")  # type: ignore[union-attr]
+            if response is not None and getattr(response, "text", None):
+                return True, ""
+            self._last_error = "Reponse vide du modele Gemini."
+            return False, self._last_error
+        except Exception as e:
+            self._last_error = (
+                f"Echec du test de connexion Gemini: {type(e).__name__}: {e}"
+            )
+            logger.error(self._last_error)
+            return False, self._last_error
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+    def _fallback_message(self) -> str:
+        """Compose the user-visible French fallback message.
+
+        Always includes the real reason so the operator can debug — this
+        is the explicit fix for the silent failure described in the bug
+        report.
+        """
+        reason = self._last_error or "raison inconnue"
+        return (
+            "L'analyse par intelligence artificielle n'est pas disponible "
+            f"pour le moment. Detail: {reason}"
+        )
+
+    def _build_prompt(self, context: dict) -> str:
+        """Build a detailed French prompt for analytical insight generation."""
         dataset_name = context.get("dataset_name", "Dataset inconnu")
         nb_rows = context.get("nb_rows", "N/A")
         nb_cols = context.get("nb_cols", "N/A")
@@ -114,22 +229,20 @@ class LLMService:
         correlations = context.get("correlations", [])
 
         # Format top anomalies
-        anomalies_text = ""
         if top_anomalies:
             anomalies_items = []
             for a in top_anomalies[:10]:
                 anomalies_items.append(
                     f"  - Colonne '{a.get('colonne', '?')}', "
                     f"Ligne {a.get('ligne', '?')}, "
-                    f"Score: {a.get('score', '?'):.2f}, "
+                    f"Score: {a.get('score', 0):.2f}, "
                     f"Algorithme: {a.get('type', '?')}"
                 )
             anomalies_text = "\n".join(anomalies_items)
         else:
-            anomalies_text = "  Aucune anomalie significative détectée."
+            anomalies_text = "  Aucune anomalie significative detectee."
 
         # Format correlations
-        correlations_text = ""
         if correlations:
             corr_items = []
             for c in correlations[:10]:
@@ -139,50 +252,33 @@ class LLMService:
                 )
             correlations_text = "\n".join(corr_items)
         else:
-            correlations_text = "  Aucune corrélation notable identifiée."
+            correlations_text = "  Aucune correlation notable identifiee."
 
-        prompt = f"""Tu es un expert en analyse de données. Analyse les informations suivantes
-et fournis un rapport d'insights en français, structuré et professionnel.
+        return f"""Tu es un expert en analyse de donnees. Analyse les informations suivantes
+et fournis un rapport d'insights en francais, structure et professionnel.
 
 === CONTEXTE DU DATASET ===
 Nom: {dataset_name}
 Nombre de lignes: {nb_rows}
 Nombre de colonnes: {nb_cols}
 
-=== RÉSUMÉ STATISTIQUE ===
+=== RESUME STATISTIQUE ===
 {stats_summary}
 
-=== ANOMALIES DÉTECTÉES ({anomalies_count} au total) ===
+=== ANOMALIES DETECTEES ({anomalies_count} au total) ===
 {anomalies_text}
 
-=== CORRÉLATIONS NOTABLES ===
+=== CORRELATIONS NOTABLES ===
 {correlations_text}
 
 === INSTRUCTIONS ===
-Fournis un rapport structuré avec les sections suivantes:
+Fournis un rapport structure avec les sections suivantes:
 
-1. **Résumé Exécutif** (2-3 phrases résumant les principales conclusions)
-2. **Constats Clés** (3-5 points importants observés dans les données)
-3. **Anomalies et Risques** (interprétation des anomalies détectées)
-4. **Recommandations** (3-5 actions concrètes basées sur l'analyse)
+1. **Resume Executif** (2-3 phrases resumant les principales conclusions)
+2. **Constats Cles** (3-5 points importants observes dans les donnees)
+3. **Anomalies et Risques** (interpretation des anomalies detectees)
+4. **Recommandations** (3-5 actions concretes basees sur l'analyse)
 
-Sois concis, professionnel et oriente tes recommandations vers la prise de décision.
-Réponds uniquement en français.
+Sois concis, professionnel et oriente tes recommandations vers la prise de decision.
+Reponds uniquement en francais.
 """
-        return prompt
-
-    def test_connection(self) -> bool:
-        """Test if the LLM API connection is working.
-
-        Returns:
-            True if the API responds successfully, False otherwise.
-        """
-        if not self._initialized or self._model is None:
-            return False
-
-        try:
-            response = self._model.generate_content("Dis 'OK' en un mot.")
-            return response is not None and response.text is not None
-        except Exception as e:
-            logger.error("Test de connexion LLM échoué: %s", e)
-            return False

@@ -62,7 +62,14 @@ DB_PASSWORD: str = _get_optional("DB_PASSWORD", "")
 
 # --- Gemini LLM ---
 LLM_PROVIDER: str = _get_optional("LLM_PROVIDER", "gemini")
-GEMINI_API_KEY: str = _get_optional("GEMINI_API_KEY", "")
+# Accept either GEMINI_API_KEY or GOOGLE_API_KEY (the official google-generativeai
+# package historically used GOOGLE_API_KEY, and the .env.example shipped with
+# the project still references it). Whichever is set wins; GEMINI_API_KEY has
+# priority for backward compatibility.
+GEMINI_API_KEY: str = (
+    _get_optional("GEMINI_API_KEY", "")
+    or _get_optional("GOOGLE_API_KEY", "")
+)
 LLM_MODEL: str = _get_optional("LLM_MODEL", "gemini-1.5-flash")
 LLM_MAX_TOKENS: int = int(_get_optional("LLM_MAX_TOKENS", "1000"))
 LLM_TEMPERATURE: float = float(_get_optional("LLM_TEMPERATURE", "0.3"))

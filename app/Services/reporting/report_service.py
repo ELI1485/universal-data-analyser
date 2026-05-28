@@ -138,7 +138,10 @@ def _generate_insights(dataset, analytics: dict, anomalies: dict) -> str:
         anomalies: The anomaly detection results.
 
     Returns:
-        The LLM-generated insights text or fallback message.
+        The LLM-generated insights text. When the LLM service is
+        unavailable, the returned string includes the real underlying
+        reason (missing API key, missing module, etc.) so the bug can be
+        diagnosed from the report itself.
     """
     try:
         llm = LLMService()
@@ -147,11 +150,20 @@ def _generate_insights(dataset, analytics: dict, anomalies: dict) -> str:
         stats_summary = ""
         stats_data = analytics.get("statistiques", {}).get("colonnes", {})
         for col_name, col_stats in list(stats_data.items())[:5]:
-            stats_summary += (
-                f"  {col_name}: moy={col_stats.get('mean')}, "
-                f"méd={col_stats.get('median')}, "
-                f"écart-type={col_stats.get('std')}\n"
-            )
+            kind = col_stats.get("_kind", "numeric")
+            if kind == "categorical":
+                stats_summary += (
+                    f"  {col_name} (categoriel): "
+                    f"{col_stats.get('unique_count')} valeurs uniques, "
+                    f"mode='{col_stats.get('mode')}' "
+                    f"({col_stats.get('mode_frequency_pct')}%)\n"
+                )
+            else:
+                stats_summary += (
+                    f"  {col_name}: moy={col_stats.get('mean')}, "
+                    f"med={col_stats.get('median')}, "
+                    f"ecart-type={col_stats.get('std')}\n"
+                )
 
         # Top anomalies
         all_anom = (
@@ -176,12 +188,13 @@ def _generate_insights(dataset, analytics: dict, anomalies: dict) -> str:
             "correlations": correlations,
         }
 
-        insights = llm.generer_insights(context)
-        return insights
+        # generer_insights() now embeds the real reason on failure, so we
+        # no longer need to mask it behind a generic fallback message.
+        return llm.generer_insights(context)
 
     except Exception as e:
-        logger.warning("Génération d'insights LLM échouée: %s", e)
+        logger.warning("Generation d'insights LLM echouee: %s", e)
         return (
             "L'analyse par intelligence artificielle n'est pas disponible. "
-            "Veuillez vérifier la configuration de l'API Gemini."
+            f"Detail: {type(e).__name__}: {e}"
         )

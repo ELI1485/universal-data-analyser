@@ -161,6 +161,120 @@ def boxplot(df: pd.DataFrame, colonne: str) -> go.Figure:
     return fig
 
 
+def bar_categorical_frequency(
+    df: pd.DataFrame, colonne: str, top_n: int = 15
+) -> go.Figure:
+    """Create a horizontal bar chart of value frequencies for a categorical column.
+
+    Used for "dominant field" visualisations such as the distribution
+    of students across a ``filiere`` column or counts of orders per
+    region. Categories beyond the top ``top_n`` are bucketed under
+    ``"Autres"`` so the chart stays readable on high-cardinality columns.
+
+    Args:
+        df: The DataFrame containing the data.
+        colonne: The categorical column to plot.
+        top_n: Max number of distinct categories shown individually.
+
+    Returns:
+        A Plotly Figure object.
+    """
+    series = df[colonne].dropna().astype(str)
+    counts = series.value_counts()
+    total = int(counts.sum())
+
+    if total == 0:
+        fig = go.Figure()
+        fig.add_annotation(text="Aucune donnee a afficher", showarrow=False)
+        fig.update_layout(title=f"Frequence — {colonne}")
+        return fig
+
+    top = counts.head(top_n)
+    if len(counts) > top_n:
+        autres = int(counts.iloc[top_n:].sum())
+        labels = top.index.tolist() + ["Autres"]
+        values = top.values.tolist() + [autres]
+    else:
+        labels = top.index.tolist()
+        values = top.values.tolist()
+
+    percentages = [round(v / total * 100, 1) for v in values]
+    text_labels = [f"{v} ({p}%)" for v, p in zip(values, percentages)]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=values,
+                y=labels,
+                orientation="h",
+                marker_color="#93DC5C",
+                text=text_labels,
+                textposition="outside",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=f"Frequence des valeurs — {colonne}",
+        xaxis_title="Nombre d'occurrences",
+        yaxis_title=colonne,
+        template="plotly_white",
+        showlegend=False,
+        yaxis={"categoryorder": "total ascending"},
+        margin=dict(l=120),
+    )
+    return fig
+
+
+def pie_categorical(df: pd.DataFrame, colonne: str, top_n: int = 8) -> go.Figure:
+    """Create a Plotly donut chart for a categorical column.
+
+    Args:
+        df: The DataFrame containing the data.
+        colonne: The categorical column to plot.
+        top_n: Max number of slices; the rest are grouped as ``"Autres"``.
+
+    Returns:
+        A Plotly Figure object.
+    """
+    counts = df[colonne].dropna().astype(str).value_counts()
+    if counts.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="Aucune donnee a afficher", showarrow=False)
+        fig.update_layout(title=f"Repartition — {colonne}")
+        return fig
+
+    top = counts.head(top_n)
+    if len(counts) > top_n:
+        autres = int(counts.iloc[top_n:].sum())
+        labels = top.index.tolist() + ["Autres"]
+        values = top.values.tolist() + [autres]
+    else:
+        labels = top.index.tolist()
+        values = top.values.tolist()
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=labels,
+                values=values,
+                hole=0.4,
+                marker=dict(
+                    colors=[
+                        "#93DC5C", "#4e732d", "#b8e986", "#6db33f",
+                        "#a3d977", "#82c241", "#5b8a2e", "#3d5a1f",
+                        "#cce8a8",
+                    ]
+                ),
+            )
+        ]
+    )
+    fig.update_layout(
+        title=f"Repartition — {colonne}",
+        template="plotly_white",
+    )
+    return fig
+
+
 def scatter(df: pd.DataFrame, col_x: str, col_y: str) -> go.Figure:
     """Create a Plotly scatter plot for two numeric columns.
 

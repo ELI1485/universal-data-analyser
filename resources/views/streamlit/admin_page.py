@@ -10,14 +10,18 @@ _admin_ctrl = AdminController()
 def render() -> None:
     """Render the admin page. Only accessible to admin users."""
     if st.session_state.get("role") != "admin":
-        st.error("Accès refusé. Cette page est réservée aux administrateurs.")
+        st.error("Acces refuse. Cette page est reservee aux administrateurs.")
         return
 
-    st.markdown("## ⚙️ Administration")
+    st.markdown(
+        "<h2 style='display: flex; align-items: center; gap: 10px;'>"
+        "<i class='fa-solid fa-gear'></i> Administration</h2>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
 
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["📊 Tableau de bord", "👥 Utilisateurs", "📋 Logs d'audit", "🔧 Configuration"]
+        ["Tableau de bord", "Utilisateurs", "Logs d'audit", "Configuration"]
     )
 
     with tab1:
@@ -35,7 +39,7 @@ def render() -> None:
 
 def _render_admin_dashboard() -> None:
     """Render the admin dashboard with system metrics."""
-    st.markdown("### Statistiques système")
+    st.markdown("### Statistiques systeme")
 
     try:
         stats = _admin_ctrl.get_statistiques_systeme()
@@ -45,10 +49,10 @@ def _render_admin_dashboard() -> None:
             st.metric("Utilisateurs totaux", stats["total_users"])
             st.metric("Utilisateurs actifs", stats["active_users"])
         with col2:
-            st.metric("Analyses effectuées", stats["total_analyses"])
-            st.metric("Rapports générés", stats["total_reports"])
+            st.metric("Analyses effectuees", stats["total_analyses"])
+            st.metric("Rapports generes", stats["total_reports"])
         with col3:
-            st.metric("Volume de données (Mo)", f"{stats['total_data_mo']:.1f}")
+            st.metric("Volume de donnees (Mo)", f"{stats['total_data_mo']:.1f}")
             st.metric("Anomalies (30 jours)", stats["anomalies_30j"])
 
     except Exception as e:
@@ -59,7 +63,6 @@ def _render_users_tab() -> None:
     """Render the users management tab."""
     st.markdown("### Gestion des utilisateurs")
 
-    # List users
     try:
         users = _admin_ctrl.lister_utilisateurs()
 
@@ -73,54 +76,74 @@ def _render_users_tab() -> None:
                 with col3:
                     st.markdown(user.role)
                 with col4:
-                    icon = "🟢" if user.statut == "actif" else "🔴"
-                    st.markdown(f"{icon} {user.statut}")
+                    status_dot = (
+                        "<span style='color:#22c55e;'>"
+                        "<i class='fa-solid fa-circle'></i></span>"
+                        if user.statut == "actif"
+                        else "<span style='color:#ef4444;'>"
+                        "<i class='fa-solid fa-circle'></i></span>"
+                    )
+                    st.markdown(f"{status_dot} {user.statut}", unsafe_allow_html=True)
                 with col5:
                     c1, c2, c3 = st.columns(3)
                     with c1:
-                        if st.button("⏸️", key=f"deact_{user.id}", help="Désactiver"):
+                        if st.button(
+                            "",
+                            key=f"deact_{user.id}",
+                            help="Desactiver",
+                            icon=":material/pause_circle:",
+                        ):
                             try:
                                 _admin_ctrl.desactiver_utilisateur(user.id)
-                                st.success(f"Utilisateur '{user.nom}' désactivé.")
+                                st.success(f"Utilisateur '{user.nom}' desactive.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(str(e))
                     with c2:
-                        if st.button("🔑", key=f"reset_{user.id}", help="Reset mdp"):
+                        if st.button(
+                            "",
+                            key=f"reset_{user.id}",
+                            help="Reset mdp",
+                            icon=":material/key:",
+                        ):
                             try:
                                 _admin_ctrl.reinitialiser_mdp(user.id, "NewPass123!")
-                                st.success("Mot de passe réinitialisé: NewPass123!")
+                                st.success("Mot de passe reinitialise: NewPass123!")
                             except Exception as e:
                                 st.error(str(e))
                     with c3:
-                        if st.button("🗑️", key=f"del_user_{user.id}", help="Supprimer"):
+                        if st.button(
+                            "",
+                            key=f"del_user_{user.id}",
+                            help="Supprimer",
+                            icon=":material/delete:",
+                        ):
                             try:
                                 _admin_ctrl.supprimer_utilisateur(user.id)
-                                st.success(f"Utilisateur supprimé.")
+                                st.success("Utilisateur supprime.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(str(e))
     except Exception as e:
         st.error(f"Erreur: {e}")
 
-    # Create user form
     st.markdown("---")
-    st.markdown("### Créer un utilisateur")
+    st.markdown("### Creer un utilisateur")
 
     with st.form("create_user_form"):
         nom = st.text_input("Nom complet")
         email = st.text_input("Email")
         password = st.text_input("Mot de passe", type="password")
-        role = st.selectbox("Rôle", ["analyste", "admin"])
-        submitted = st.form_submit_button("Créer l'utilisateur")
+        role = st.selectbox("Role", ["analyste", "admin"])
+        submitted = st.form_submit_button("Creer l'utilisateur")
 
     if submitted:
         if not all([nom, email, password]):
             st.error("Tous les champs sont obligatoires.")
         else:
             try:
-                user = _admin_ctrl.creer_utilisateur(nom, email, password, role)
-                st.success(f"✅ Utilisateur '{nom}' créé avec succès!")
+                _admin_ctrl.creer_utilisateur(nom, email, password, role)
+                st.success(f"Utilisateur '{nom}' cree avec succes.")
                 st.rerun()
             except ValueError as e:
                 st.error(str(e))
@@ -141,9 +164,9 @@ def _render_audit_tab() -> None:
             for log in logs:
                 log_data.append({
                     "Date": log.horodatage.strftime("%d/%m/%Y %H:%M") if log.horodatage else "N/A",
-                    "User ID": log.user_id or "Système",
+                    "User ID": log.user_id or "Systeme",
                     "Action": log.action,
-                    "Entité": log.entite,
+                    "Entite": log.entite,
                     "Statut": log.statut,
                     "Message": (log.message or "")[:80],
                 })
@@ -154,16 +177,18 @@ def _render_audit_tab() -> None:
     except Exception as e:
         st.error(f"Erreur: {e}")
 
-    # Error logs
-    st.markdown("### ❌ Logs d'erreurs")
+    st.markdown(
+        "<h3><i class='fa-solid fa-circle-xmark'></i> Logs d'erreurs</h3>",
+        unsafe_allow_html=True,
+    )
     try:
         error_logs = _admin_ctrl.get_error_logs(limit=20)
         if error_logs:
             for log in error_logs:
                 timestamp = log.horodatage.strftime("%d/%m/%Y %H:%M") if log.horodatage else "N/A"
-                st.error(f"{timestamp} — {log.action}: {log.message}")
+                st.error(f"{timestamp} - {log.action}: {log.message}")
         else:
-            st.success("Aucune erreur récente.")
+            st.success("Aucune erreur recente.")
     except Exception as e:
         st.error(f"Erreur: {e}")
 
@@ -174,24 +199,30 @@ def _render_config_tab() -> None:
 
     st.markdown("#### LLM (Gemini)")
     from config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
-    st.text_input("Modèle", value=LLM_MODEL, disabled=True)
-    st.number_input("Température", value=LLM_TEMPERATURE, disabled=True)
+    st.text_input("Modele", value=LLM_MODEL, disabled=True)
+    st.number_input("Temperature", value=LLM_TEMPERATURE, disabled=True)
     st.number_input("Max tokens", value=LLM_MAX_TOKENS, disabled=True)
 
-    if st.button("🔌 Tester connexion LLM"):
+    if st.button(
+        "Tester connexion LLM",
+        icon=":material/wifi:",
+    ):
         try:
             from app.Services.llm_service import LLMService
             llm = LLMService()
-            success = llm.test_connection()
+            success, error_message = llm.test_connection()
             if success:
-                st.success("✅ Connexion LLM fonctionnelle!")
+                st.success("Connexion LLM fonctionnelle.")
             else:
-                st.warning("⚠️ Connexion LLM non disponible. Vérifiez la clé API.")
+                st.warning(
+                    "Connexion LLM non disponible. "
+                    f"Detail: {error_message or 'Verifiez la cle API et le modele.'}"
+                )
         except Exception as e:
             st.error(f"Erreur: {e}")
 
-    st.markdown("#### Seuils de détection d'anomalies")
+    st.markdown("#### Seuils de detection d'anomalies")
     st.number_input("Seuil Z-Score", value=3.0, disabled=True)
     st.number_input("Facteur IQR", value=1.5, disabled=True)
     st.number_input("Contamination Isolation Forest", value=0.05, disabled=True)
-    st.info("Pour modifier ces paramètres, éditez le fichier .env")
+    st.info("Pour modifier ces parametres, editez le fichier .env")

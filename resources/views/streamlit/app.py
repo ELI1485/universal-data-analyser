@@ -38,7 +38,7 @@ def main() -> None:
     """Main application entry point with routing logic."""
     st.set_page_config(
         page_title="Universal Data Analyzer",
-        page_icon="📊",
+        page_icon=":material/analytics:",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -70,38 +70,65 @@ def main() -> None:
 
 def _render_authenticated_app() -> None:
     """Render the main application for authenticated users."""
-    # Sidebar navigation
+    # Sidebar navigation — Streamlit material icons (no emojis)
     with st.sidebar:
         render_sidebar_header(st.session_state['nom'], st.session_state['role'])
 
-        # Navigation buttons
-        if st.button("🏠 Tableau de bord", use_container_width=True):
+        if st.button(
+            "Tableau de bord",
+            use_container_width=True,
+            icon=":material/dashboard:",
+        ):
             st.session_state["current_page"] = "dashboard"
             st.rerun()
 
-        if st.button("📂 Importer des données", use_container_width=True):
+        if st.button(
+            "Importer des donnees",
+            use_container_width=True,
+            icon=":material/upload_file:",
+        ):
             st.session_state["current_page"] = "upload"
             st.rerun()
 
-        if st.button("📊 Analyses", use_container_width=True):
+        if st.button(
+            "Analyses",
+            use_container_width=True,
+            icon=":material/analytics:",
+        ):
             st.session_state["current_page"] = "analytics"
             st.rerun()
 
-        if st.button("📜 Rapports", use_container_width=True):
+        if st.button(
+            "Rapports",
+            use_container_width=True,
+            icon=":material/description:",
+        ):
             st.session_state["current_page"] = "report"
             st.rerun()
 
-        if st.button("🔍 Comparaison", use_container_width=True):
+        if st.button(
+            "Comparaison",
+            use_container_width=True,
+            icon=":material/compare:",
+        ):
             st.session_state["current_page"] = "comparison"
             st.rerun()
 
         if st.session_state["role"] == "admin":
-            if st.button("⚙️ Administration", use_container_width=True):
+            if st.button(
+                "Administration",
+                use_container_width=True,
+                icon=":material/settings:",
+            ):
                 st.session_state["current_page"] = "admin"
                 st.rerun()
 
         st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("🚪 Déconnexion", use_container_width=True):
+        if st.button(
+            "Deconnexion",
+            use_container_width=True,
+            icon=":material/logout:",
+        ):
             _logout()
 
     # Route to the selected page
@@ -125,7 +152,7 @@ def _render_authenticated_app() -> None:
         if st.session_state["role"] == "admin":
             render_admin()
         else:
-            st.error("Accès refusé. Cette page est réservée aux administrateurs.")
+            st.error("Acces refuse. Cette page est reservee aux administrateurs.")
     else:
         render_dashboard(
             st.session_state["user_id"],
