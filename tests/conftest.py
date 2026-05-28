@@ -29,12 +29,12 @@ os.environ.setdefault("LOG_DIR", "./test_logs")
 os.environ.setdefault("EXPORT_DIR", "./test_exports")
 
 from database.base import Base
-from models.user import User
-from models.dataset import Dataset
-from models.anomaly import Anomaly
-from models.report import Report
-from models.audit_log import AuditLog
-from services.auth_service import hash_password, create_token
+from app.Models.user import User
+from app.Models.dataset import Dataset
+from app.Models.anomaly import Anomaly
+from app.Models.report import Report
+from app.Models.audit_log import AuditLog
+from app.Services.auth_service import hash_password, create_token
 
 
 @pytest.fixture

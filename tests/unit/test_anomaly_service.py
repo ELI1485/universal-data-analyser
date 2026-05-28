@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from services.anomaly.zscore_detector import detecter as detecter_zscore
-from services.anomaly.iqr_detector import detecter as detecter_iqr
-from services.anomaly.isolation_detector import detecter as detecter_isolation
+from app.Services.anomaly.zscore_detector import detecter as detecter_zscore
+from app.Services.anomaly.iqr_detector import detecter as detecter_iqr
+from app.Services.anomaly.isolation_detector import detecter as detecter_isolation
 
 
 class TestZScoreDetector:

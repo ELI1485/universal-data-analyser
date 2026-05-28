@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from services.analytics.descriptive_statistics import calculer
-from services.analytics.kpi_engine import calculer_kpis
+from app.Services.analytics.descriptive_statistics import calculer
+from app.Services.analytics.kpi_engine import calculer_kpis
 
 
 class TestDescriptiveStatistics:

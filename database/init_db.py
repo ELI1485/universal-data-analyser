@@ -21,11 +21,11 @@ from database.base import Base
 from database.connection import engine, SessionLocal
 
 # Import all models so they register with Base.metadata
-from models.user import User
-from models.dataset import Dataset
-from models.anomaly import Anomaly
-from models.report import Report
-from models.audit_log import AuditLog
+from app.Models.user import User
+from app.Models.dataset import Dataset
+from app.Models.anomaly import Anomaly
+from app.Models.report import Report
+from app.Models.audit_log import AuditLog
 
 
 def create_tables() -> None:

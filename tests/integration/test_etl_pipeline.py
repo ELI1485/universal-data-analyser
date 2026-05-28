@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from services.etl.ingestion_service import lire_fichier
-from services.etl.validation_service import valider
-from services.etl.cleaning_service import nettoyer
+from app.Services.etl.ingestion_service import lire_fichier
+from app.Services.etl.validation_service import valider
+from app.Services.etl.cleaning_service import nettoyer
 
 
 class TestETLPipelineIntegration:

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from services.etl.cleaning_service import nettoyer
+from app.Services.etl.cleaning_service import nettoyer
 
 
 class TestNettoyerDuplicates:

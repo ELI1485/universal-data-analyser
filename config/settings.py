@@ -78,6 +78,14 @@ MAX_FILE_SIZE_MB: int = int(_get_optional("MAX_FILE_SIZE_MB", "50"))
 EXPORT_DIR: str = _get_optional("EXPORT_DIR", "./exports")
 LOG_DIR: str = _get_optional("LOG_DIR", "./logs")
 
+# --- Email Notifications (SMTP) ---
+SMTP_HOST: str = _get_optional("SMTP_HOST", "")
+SMTP_PORT: int = int(_get_optional("SMTP_PORT", "587"))
+SMTP_USER: str = _get_optional("SMTP_USER", "")
+SMTP_PASSWORD: str = _get_optional("SMTP_PASSWORD", "")
+SMTP_FROM: str = _get_optional("SMTP_FROM", "noreply@uda.local")
+SMTP_ENABLED: bool = bool(SMTP_HOST.strip())
+
 
 def get_db_url() -> str:
     """Build and return the SQLAlchemy database connection URL.

@@ -5,7 +5,7 @@ import time
 import pytest
 import jwt
 
-from services.auth_service import (
+from app.Services.auth_service import (
     hash_password,
     verify_password,
     create_token,
