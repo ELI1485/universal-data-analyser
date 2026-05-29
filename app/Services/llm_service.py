@@ -1,14 +1,11 @@
-"""LLM service using strategy pattern for AI insight generation.
+"""LLM service using OpenAI-compatible client for Groq insight generation.
 
-Supports Gemini (default) as the LLM provider. Generates analytical
+Supports Groq as the LLM provider (using Llama 3). Generates analytical
 insights in French based on dataset context.
 
 This module is deliberately verbose with its error reporting: when the
-service is unavailable, the precise reason (missing API key, missing
-``google-generativeai`` package, model rejected, network error, etc.)
-is captured on the instance and surfaced through the public API. The
-old behaviour of swallowing all errors behind a generic French message
-hid actionable diagnostics.
+service is unavailable, the precise reason is captured on the instance 
+and surfaced through the public API.
 """
 
 from __future__ import annotations
@@ -17,7 +14,7 @@ import logging
 
 from config.settings import (
     LLM_PROVIDER,
-    GEMINI_API_KEY,
+    GROQ_API_KEY,
     LLM_MODEL,
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
@@ -27,105 +24,78 @@ logger = logging.getLogger(__name__)
 
 
 class LLMUnavailableError(RuntimeError):
-    """Raised internally when an LLM call cannot be made.
-
-    The string representation is suitable for showing to operators and
-    contains the real underlying cause (missing key, missing module,
-    invalid model, etc.).
-    """
+    """Raised internally when an LLM call cannot be made."""
 
 
 class LLMService:
     """Service for generating AI-powered analytical insights.
 
-    Uses the Gemini API (Google Generative AI) by default to generate
+    Uses the OpenAI Python client configured for Groq to generate
     French-language analytical insights from dataset statistics.
-
-    Public surface:
-        - ``generer_insights(context)`` -> str. Returns either the LLM
-          output or, when the service is unavailable, a clear French
-          fallback message that **includes the real reason** so it can
-          be debugged from the UI/logs.
-        - ``test_connection()`` -> tuple[bool, str]. Returns
-          ``(success, error_message)``. ``error_message`` is empty
-          when the connection succeeds.
-        - ``is_available`` (property) -> bool.
-        - ``last_error`` (property) -> str. The latest captured init or
-          call error, or an empty string when none.
     """
 
     def __init__(self) -> None:
-        """Initialize the LLM service based on the configured provider."""
-        self._model = None
+        """Initialize the LLM service."""
+        self._client = None
         self._initialized = False
         self._last_error: str = ""
 
-        provider = (LLM_PROVIDER or "gemini").lower().strip()
-        if provider != "gemini":
+        provider = (LLM_PROVIDER or "groq").lower().strip()
+        if provider != "groq":
             logger.warning(
-                "Fournisseur LLM inconnu: '%s'. Utilisation de gemini.", provider
+                "Fournisseur LLM inconnu: '%s'. Utilisation de groq.", provider
             )
-        self._init_gemini()
+        self._init_groq()
 
     # ------------------------------------------------------------------
     # Initialisation
     # ------------------------------------------------------------------
-    def _init_gemini(self) -> None:
-        """Initialize the Google Gemini API client.
+    def _init_groq(self) -> None:
+        """Initialize the OpenAI client for Groq.
 
-        On failure the precise reason is recorded in ``self._last_error``
-        rather than being silently swallowed.
+        On failure the precise reason is recorded in ``self._last_error``.
         """
         # 1. Check for the API key
-        if not GEMINI_API_KEY or GEMINI_API_KEY.strip() in (
+        if not GROQ_API_KEY or GROQ_API_KEY.strip() in (
             "",
-            "your-gemini-api-key",
-            "your-api-key",
+            "votre_cle_api_groq_ici",
         ):
             self._last_error = (
-                "Cle API Gemini manquante. Definissez GEMINI_API_KEY "
-                "(ou GOOGLE_API_KEY) dans le fichier .env."
+                "Clé API Groq manquante. Définissez GROQ_API_KEY "
+                "dans le fichier .env."
             )
-            logger.warning("Service LLM non initialise: %s", self._last_error)
+            logger.warning("Service LLM non initialisé: %s", self._last_error)
             return
 
         # 2. Check the SDK is installed
         try:
-            import google.generativeai as genai  # type: ignore[import-not-found]
+            import openai
         except ImportError as e:
             self._last_error = (
-                "Module 'google-generativeai' introuvable. Installez-le avec "
-                "`pip install google-generativeai>=0.7.0` "
+                "Module 'openai' introuvable. Installez-le avec "
+                "`pip install openai` "
                 f"(detail: {e})."
             )
-            logger.error("Service LLM non initialise: %s", self._last_error)
-            return
-        except Exception as e:  # pragma: no cover - defensive
-            self._last_error = f"Erreur d'import google-generativeai: {e}"
-            logger.error("Service LLM non initialise: %s", self._last_error)
+            logger.error("Service LLM non initialisé: %s", self._last_error)
             return
 
-        # 3. Configure the SDK and instantiate the model
+        # 3. Configure the SDK
         try:
-            genai.configure(api_key=GEMINI_API_KEY)
-            self._model = genai.GenerativeModel(
-                model_name=LLM_MODEL,
-                generation_config={
-                    "temperature": LLM_TEMPERATURE,
-                    "max_output_tokens": LLM_MAX_TOKENS,
-                },
+            self._client = openai.OpenAI(
+                api_key=GROQ_API_KEY,
+                base_url="https://api.groq.com/openai/v1",
             )
             self._initialized = True
             self._last_error = ""
             logger.info(
-                "Service LLM Gemini initialise avec modele: %s", LLM_MODEL
+                "Service LLM Groq initialisé avec modèle: %s", LLM_MODEL
             )
         except Exception as e:
             self._last_error = (
-                f"Echec d'initialisation du modele Gemini '{LLM_MODEL}': "
+                f"Échec d'initialisation du client OpenAI pour Groq: "
                 f"{type(e).__name__}: {e}"
             )
-            logger.error("Service LLM non initialise: %s", self._last_error)
+            logger.error("Service LLM non initialisé: %s", self._last_error)
             self._initialized = False
 
     # ------------------------------------------------------------------
@@ -133,8 +103,8 @@ class LLMService:
     # ------------------------------------------------------------------
     @property
     def is_available(self) -> bool:
-        """``True`` when a Gemini call can be attempted."""
-        return self._initialized and self._model is not None
+        """``True`` when a Groq call can be attempted."""
+        return self._initialized and self._client is not None
 
     @property
     def last_error(self) -> str:
@@ -145,15 +115,10 @@ class LLMService:
         """Generate analytical insights from a dataset context.
 
         Args:
-            context: A dictionary with at least:
-                - ``dataset_name``, ``nb_rows``, ``nb_cols``
-                - ``stats_summary``, ``anomalies_count``, ``top_anomalies``
-                - ``correlations``
+            context: A dictionary with dataset stats.
 
         Returns:
-            A French-language string with the AI insights, or — when the
-            service is unavailable — a fallback message that **includes
-            the real reason** so the bug can be debugged.
+            A French-language string with the AI insights, or a fallback message.
         """
         if not self.is_available:
             return self._fallback_message()
@@ -161,43 +126,102 @@ class LLMService:
         prompt = self._build_prompt(context)
 
         try:
-            response = self._model.generate_content(prompt)  # type: ignore[union-attr]
-            if response and getattr(response, "text", None):
-                logger.info("Insights IA generes avec succes.")
-                return response.text
-
-            self._last_error = (
-                "La reponse de Gemini est vide. Verifiez les filtres de "
-                "securite ou le quota du modele."
+            response = self._client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": "Tu es un expert en analyse de données. Réponds uniquement en français de manière professionnelle et structurée."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS,
             )
+            
+            content = response.choices[0].message.content
+            if content:
+                logger.info("Insights IA générés avec succès via Groq.")
+                return content
+
+            self._last_error = "La réponse de Groq est vide."
             logger.warning(self._last_error)
             return self._fallback_message()
+            
         except Exception as e:
             self._last_error = (
-                f"Erreur lors de l'appel Gemini: {type(e).__name__}: {e}"
+                f"Erreur lors de l'appel Groq API: {type(e).__name__}: {e}"
             )
             logger.error(self._last_error)
             return self._fallback_message()
 
-    def test_connection(self) -> tuple[bool, str]:
-        """Test the Gemini API connection.
+    def generer_rapport_html(self, context: dict) -> str:
+        """Generate a full HTML report from a dataset context.
+
+        Args:
+            context: A dictionary with dataset stats.
+
+        Returns:
+            A string containing the AI-generated HTML report.
+        """
+        if not self.is_available:
+            return f"<h1>Erreur</h1><p>{self._fallback_message()}</p>"
+
+        prompt = self._build_html_prompt(context)
+
+        try:
+            # We allow more tokens for a full HTML report
+            response = self._client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": "Tu es un data scientist expert. Réponds UNIQUEMENT avec du code HTML valide. Ne mets pas de balises Markdown (comme ```html)."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2, # Lower temp for strict structural adherence
+                max_tokens=4000,
+            )
+            
+            content = response.choices[0].message.content
+            if content:
+                # Strip markdown blocks if the LLM ignores instructions
+                content = content.replace("```html", "").replace("```", "").strip()
+                logger.info("Rapport HTML généré avec succès via Groq.")
+                return content
+
+            self._last_error = "La réponse de Groq est vide."
+            logger.warning(self._last_error)
+            return f"<h1>Erreur</h1><p>{self._last_error}</p>"
+            
+        except Exception as e:
+            self._last_error = (
+                f"Erreur lors de l'appel Groq API (HTML): {type(e).__name__}: {e}"
+            )
+            logger.error(self._last_error)
+            return f"<h1>Erreur</h1><p>{self._last_error}</p>"
+
+    def test_connection(self) -> tuple[bool, str] :
+        """Test the Groq API connection.
 
         Returns:
             ``(True, "")`` when the call succeeds, otherwise
             ``(False, error_message)`` with a French-language reason.
         """
         if not self.is_available:
-            return False, self._last_error or "Service LLM non initialise."
+            return False, self._last_error or "Service LLM non initialisé."
 
         try:
-            response = self._model.generate_content("Dis 'OK' en un mot.")  # type: ignore[union-attr]
-            if response is not None and getattr(response, "text", None):
+            response = self._client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": "Dis 'OK' en un mot."}],
+                max_tokens=10,
+            )
+            content = response.choices[0].message.content
+            if content:
                 return True, ""
-            self._last_error = "Reponse vide du modele Gemini."
+            
+            self._last_error = "Réponse vide du modèle Groq."
             return False, self._last_error
+            
         except Exception as e:
             self._last_error = (
-                f"Echec du test de connexion Gemini: {type(e).__name__}: {e}"
+                f"Échec du test de connexion Groq: {type(e).__name__}: {e}"
             )
             logger.error(self._last_error)
             return False, self._last_error
@@ -206,12 +230,7 @@ class LLMService:
     # Internals
     # ------------------------------------------------------------------
     def _fallback_message(self) -> str:
-        """Compose the user-visible French fallback message.
-
-        Always includes the real reason so the operator can debug — this
-        is the explicit fix for the silent failure described in the bug
-        report.
-        """
+        """Compose the user-visible French fallback message."""
         reason = self._last_error or "raison inconnue"
         return (
             "L'analyse par intelligence artificielle n'est pas disponible "
@@ -254,8 +273,7 @@ class LLMService:
         else:
             correlations_text = "  Aucune correlation notable identifiee."
 
-        return f"""Tu es un expert en analyse de donnees. Analyse les informations suivantes
-et fournis un rapport d'insights en francais, structure et professionnel.
+        return f"""Analyse les informations suivantes et fournis un rapport d'insights en francais, structure et professionnel.
 
 === CONTEXTE DU DATASET ===
 Nom: {dataset_name}
@@ -280,5 +298,42 @@ Fournis un rapport structure avec les sections suivantes:
 4. **Recommandations** (3-5 actions concretes basees sur l'analyse)
 
 Sois concis, professionnel et oriente tes recommandations vers la prise de decision.
-Reponds uniquement en francais.
+"""
+
+    def _build_html_prompt(self, context: dict) -> str:
+        """Build a detailed prompt specifically requesting HTML output."""
+        dataset_name = context.get("dataset_name", "Dataset inconnu")
+        nb_rows = context.get("nb_rows", "N/A")
+        nb_cols = context.get("nb_cols", "N/A")
+        stats_summary = context.get("stats_summary", "Non disponible")
+        anomalies_count = context.get("anomalies_count", 0)
+        
+        # Inject chart placeholders (these will be replaced by the PDF generator)
+        # Note: We tell the AI to include these specific tags so we can swap them out later if needed,
+        # or we just let the AI format the text and we append charts manually.
+        # Actually, xhtml2pdf handles standard <img src="file:///...">. We will just tell the AI to structure the data.
+
+        return f"""Analyse les statistiques suivantes et génère un rapport complet au format HTML.
+
+=== CONTEXTE DU DATASET ===
+Nom: {dataset_name}
+Lignes: {nb_rows} | Colonnes: {nb_cols}
+
+=== RESUME STATISTIQUE ===
+{stats_summary}
+
+=== ANOMALIES DETECTEES ({anomalies_count} au total) ===
+(Voir les tableaux dans le rapport PDF pour le détail)
+
+=== INSTRUCTIONS ===
+1. Génère un document HTML complet avec les balises <html>, <head>, et <body>.
+2. Dans le <head>, inclus un bloc <style> avec CSS pour un design professionnel, moderne et propre (utilise des polices sans-serif comme Arial ou Helvetica, des couleurs professionnelles comme le bleu marine #1a237e).
+3. Le <body> doit contenir:
+   - Un titre principal <h1>
+   - Une section "Résumé Exécutif"
+   - Une section "Analyse de la Qualité des Données" (basé sur le nombre de lignes et les statistiques)
+   - Une section "Insights Clés et Tendances"
+   - Une section "Conclusion et Recommandations"
+4. Utilise des tableaux HTML (<table>, <tr>, <td>) si tu veux résumer des chiffres importants.
+5. NE RÉPONDS QU'AVEC DU CODE HTML. AUCUN TEXTE AVANT OU APRÈS LE CODE HTML.
 """

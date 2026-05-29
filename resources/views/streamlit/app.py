@@ -31,6 +31,8 @@ from resources.views.streamlit.report_page import render as render_report  # noq
 from resources.views.streamlit.comparison_page import render as render_comparison  # noqa: E402
 from resources.views.streamlit.admin_page import render as render_admin  # noqa: E402
 from resources.views.streamlit.signup_page import render as render_signup  # noqa: E402
+from resources.views.streamlit.forgot_password_page import render as render_forgot_password  # noqa: E402
+from resources.views.streamlit.reset_password_page import render as render_reset_password  # noqa: E402
 from resources.views.streamlit.style_utils import inject_custom_css, render_sidebar_header  # noqa: E402
 
 
@@ -55,16 +57,20 @@ def main() -> None:
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = "login"
 
-    # Inject custom CSS
-    inject_custom_css()
-
     # Route based on authentication
     if not st.session_state["token"]:
-        if st.session_state["current_page"] == "signup":
+        # Check if URL has a reset token
+        if "reset_token" in st.query_params:
+            render_reset_password(st.query_params["reset_token"])
+        elif st.session_state["current_page"] == "signup":
             render_signup()
+        elif st.session_state["current_page"] == "forgot_password":
+            render_forgot_password()
         else:
             render_login()
     else:
+        # Only inject dashboard CSS for authenticated pages
+        inject_custom_css()
         _render_authenticated_app()
 
 

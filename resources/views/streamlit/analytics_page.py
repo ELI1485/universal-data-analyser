@@ -77,9 +77,63 @@ def render(user_id: int, role: str) -> None:
 
 def _display_results(analytics: dict, anomalies: dict, dataset_id: int) -> None:
     """Display analysis results in tabs."""
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Statistiques", "Visualisations", "Anomalies", "Correlations", "Insights IA"]
-    )
+    # Inject custom CSS for tabs
+    st.markdown("""
+        <style>
+        /* Add spacing and custom styling to Streamlit tabs */
+        div[data-baseweb="tab-list"] {
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+        button[data-baseweb="tab"] {
+            font-size: 16px !important;
+            font-weight: 500 !important;
+            padding: 10px 15px !important;
+            border-radius: 6px 6px 0 0 !important;
+            transition: all 0.3s ease;
+        }
+        button[data-baseweb="tab"]:hover {
+            background-color: rgba(147, 220, 92, 0.1) !important;
+            color: #93DC5C !important;
+        }
+        
+        /* FontAwesome CSS Icons for Tabs */
+        button[data-baseweb="tab"] div[data-testid="stMarkdownContainer"] p::before {
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            margin-right: 8px;
+            color: #93DC5C;
+        }
+        /* Tab 1: Statistiques */
+        button[data-baseweb="tab"]:nth-child(1) div[data-testid="stMarkdownContainer"] p::before {
+            content: "\\f080";
+        }
+        /* Tab 2: Visualisations */
+        button[data-baseweb="tab"]:nth-child(2) div[data-testid="stMarkdownContainer"] p::before {
+            content: "\\f201";
+        }
+        /* Tab 3: Anomalies */
+        button[data-baseweb="tab"]:nth-child(3) div[data-testid="stMarkdownContainer"] p::before {
+            content: "\\f071";
+        }
+        /* Tab 4: Correlations */
+        button[data-baseweb="tab"]:nth-child(4) div[data-testid="stMarkdownContainer"] p::before {
+            content: "\\f0c1";
+        }
+        /* Tab 5: Insights IA */
+        button[data-baseweb="tab"]:nth-child(5) div[data-testid="stMarkdownContainer"] p::before {
+            content: "\\f544";
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Statistiques", 
+        "Visualisations", 
+        "Anomalies", 
+        "Corrélations", 
+        "Insights IA"
+    ])
 
     with tab1:
         _render_statistics_tab(analytics)

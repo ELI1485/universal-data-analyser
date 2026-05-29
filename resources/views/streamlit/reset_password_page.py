@@ -1,16 +1,10 @@
-"""Streamlit login page."""
+"""Streamlit reset password page."""
 
 import streamlit as st
 
-from app.Http.Controllers.auth_controller import AuthController
-
-_auth_ctrl = AuthController()
-
-
-# ── Shared CSS for auth pages ─────────────────────────────────────
+# Re-use the exact same CSS as login for visual consistency
 _AUTH_CSS = """
 <style>
-/* 1. Global shell */
 [data-testid="stAppViewContainer"] {
     background: linear-gradient(135deg, #93DC5C 0%, #4e732d 100%) !important;
     font-family: 'Nunito', sans-serif !important;
@@ -19,8 +13,6 @@ _AUTH_CSS = """
 .stDeployButton, [data-testid="stToolbar"] {
     display: none !important;
 }
-
-/* 2. Center the card */
 [data-testid="stMain"] {
     display: flex;
     justify-content: center;
@@ -37,8 +29,6 @@ _AUTH_CSS = """
     margin-top: 5vh;
     margin-bottom: 5vh;
 }
-
-/* 3. Left column — image panel */
 [data-testid="column"]:nth-of-type(1) {
     background-image: url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop');
     background-size: cover;
@@ -51,15 +41,13 @@ _AUTH_CSS = """
     border-radius: 20px 0 0 20px !important;
     box-sizing: border-box !important;
 }
-[data-testid="column"]:nth-of-type(1)::after {
+[data-testid="column"]:nth-of-type(1):after {
     content: '';
     position: absolute;
     inset: 0;
     background: rgba(0,0,0,0.28);
     border-radius: 18px 0 0 18px;
 }
-
-/* Logo wrapper — fills column and centers the box */
 .auth-logo-wrapper {
     position: relative;
     z-index: 2;
@@ -139,16 +127,6 @@ div[data-baseweb="input"]:focus-within {
     font-weight: 400 !important;
 }
 
-/* 6. Checkbox */
-[data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-child {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
-}
-.stCheckbox label span, .stCheckbox label p {
-    font-size: 0.85rem !important;
-    color: #333 !important;
-}
-
-/* 7. Submit button */
 [data-testid="stFormSubmitButton"] button {
     font-size: 0.85rem !important;
     border-radius: 10rem !important;
@@ -166,7 +144,6 @@ div[data-baseweb="input"]:focus-within {
     box-shadow: 0 4px 14px rgba(147,220,92,0.35) !important;
 }
 
-/* 8. Links */
 .auth-footer {
     text-align: center;
     color: #333 !important;
@@ -175,8 +152,6 @@ div[data-baseweb="input"]:focus-within {
     margin-top: 22px;
     padding-bottom: 10px;
 }
-
-/* Signup/back button styled as text link */
 div.stButton button {
     background: transparent !important;
     color: #333 !important;
@@ -196,7 +171,14 @@ div.stButton button:hover {
     text-decoration: underline !important;
 }
 
-/* 9. Responsive */
+.forgot-password-desc {
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.9rem;
+    color: #555;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
 @media (max-width: 1000px) {
     [data-testid="stHorizontalBlock"] { flex-direction: column; }
     [data-testid="column"]:nth-of-type(1) { display: none !important; }
@@ -207,16 +189,20 @@ div.stButton button:hover {
 """
 
 
-def render() -> None:
-    """Render the login page with the green-themed split card."""
+def render(token: str) -> None:
+    """Render the reset password page.
+    
+    Args:
+        token: The JWT reset token passed from the URL.
+    """
 
-    # ── Font imports (separate call to avoid parser issues) ────────
+    # ── Font (separate call) ──────────────────────────────────────
     st.markdown(
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&display=swap">',
         unsafe_allow_html=True,
     )
 
-    # ── CSS (own call — no <link> tags mixed in) ──────────────────
+    # ── CSS (own call) ────────────────────────────────────────────
     st.markdown(_AUTH_CSS, unsafe_allow_html=True)
 
     # ── Layout ────────────────────────────────────────────────────
@@ -236,42 +222,49 @@ def render() -> None:
         )
 
     with col2:
-        st.markdown('<p class="auth-form-title">Connexion</p>', unsafe_allow_html=True)
+        st.markdown('<p class="auth-form-title">Nouveau mot de passe</p>', unsafe_allow_html=True)
+        
+        st.markdown('<p class="forgot-password-desc">Veuillez entrer votre nouveau mot de passe ci-dessous.</p>', unsafe_allow_html=True)
 
-        with st.form("login_form", clear_on_submit=False):
-            email = st.text_input(
-                "Identifiant", placeholder="Ex: admin@uda.local", label_visibility="collapsed"
+        with st.form("reset_password_form", clear_on_submit=False):
+            new_password = st.text_input(
+                "Nouveau mot de passe", type="password", placeholder="Nouveau mot de passe", label_visibility="collapsed"
             )
-            password = st.text_input(
-                "Mot de passe", type="password", placeholder="Mot de passe", label_visibility="collapsed"
+            confirm_password = st.text_input(
+                "Confirmer le mot de passe", type="password", placeholder="Confirmer le mot de passe", label_visibility="collapsed"
             )
-            st.checkbox("Se rappeler de moi", key="remember_me")
-            submitted = st.form_submit_button("Se connecter", use_container_width=True)
+
+            submitted = st.form_submit_button("Mettre à jour", use_container_width=True)
 
         if submitted:
-            if email and password:
-                try:
-                    result = _auth_ctrl.login(email, password, ip="127.0.0.1")
-                    st.session_state.update({
-                        "token": result["token"],
-                        "user_id": result["user_id"],
-                        "role": result["role"],
-                        "nom": result["nom"],
-                        "current_page": "dashboard",
-                    })
-                    st.success("Connexion reussie!")
-                    st.rerun()
-                except Exception:
-                    st.error("Identifiants invalides")
+            if new_password and confirm_password:
+                if new_password != confirm_password:
+                    st.error("Les mots de passe ne correspondent pas.")
+                elif len(new_password) < 8:
+                    st.error("Le mot de passe doit contenir au moins 8 caractères.")
+                else:
+                    try:
+                        from app.Http.Controllers.auth_controller import AuthController
+                        _auth_ctrl = AuthController()
+                        _auth_ctrl.reset_password(token, new_password)
+                        
+                        st.success("Mot de passe mis à jour avec succès!")
+                        st.session_state["current_page"] = "login"
+                        
+                        # Clear the query params so we don't get stuck on this page
+                        st.query_params.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
             else:
-                st.error("Veuillez remplir tous les champs")
+                st.error("Veuillez remplir tous les champs.")
 
-        if st.button("Mot de passe oublie ?", key="forgot_password", use_container_width=True):
-            st.session_state["current_page"] = "forgot_password"
+        if st.button("Retour à la connexion", key="goto_login", use_container_width=True):
+            st.session_state["current_page"] = "login"
+            st.query_params.clear()
             st.rerun()
 
-        if st.button("Don't have an account? Create one", key="goto_signup", use_container_width=True):
-            st.session_state["current_page"] = "signup"
-            st.rerun()
-
-        st.markdown('<div class="auth-footer">Copyright &copy; 2026 - Tous droits reserves</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="auth-footer">Copyright &copy; 2026 - Tous droits reserves</div>',
+            unsafe_allow_html=True,
+        )

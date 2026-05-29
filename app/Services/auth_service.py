@@ -100,6 +100,57 @@ def verify_token(token: str) -> dict:
         raise
 
 
+def generate_reset_token(email: str) -> str:
+    """Generate a short-lived JWT token for password reset."""
+    user = _user_repo.find_by_email(email)
+    if not user:
+        raise ValueError("Email inconnu.")
+    
+    expiration = datetime.now(timezone.utc) + timedelta(minutes=15)
+    payload = {
+        "email": email,
+        "purpose": "password_reset",
+        "exp": expiration,
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
+
+
+def reset_password(token: str, new_password: str) -> bool:
+    """Verify reset token and update password."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        if payload.get("purpose") != "password_reset":
+            raise ValueError("Type de token invalide.")
+        
+        email = payload["email"]
+        user = _user_repo.find_by_email(email)
+        if not user:
+            raise ValueError("Utilisateur introuvable.")
+            
+        password_hash = hash_password(new_password)
+        _user_repo.update(user.id, mot_de_passe=password_hash)
+        
+        _audit_repo.log(
+            user_id=user.id,
+            action="password_reset",
+            entite="user",
+            entite_id=user.id,
+            statut="succes",
+            message="Mot de passe réinitialisé via lien",
+            ip_address="127.0.0.1",
+        )
+        logger.info("Mot de passe réinitialisé pour %s", email)
+        return True
+        
+    except jwt.ExpiredSignatureError:
+        logger.warning("Token de réinitialisation expiré")
+        raise ValueError("Le lien de réinitialisation a expiré. Veuillez refaire une demande.")
+    except jwt.InvalidTokenError:
+        logger.warning("Token de réinitialisation invalide")
+        raise ValueError("Le lien de réinitialisation est invalide ou corrompu.")
+
+
 def get_current_user(token: str) -> dict:
     """Get the current user information from a valid token.
 

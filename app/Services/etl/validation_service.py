@@ -52,14 +52,21 @@ def valider(df: pd.DataFrame) -> tuple[bool, list[str]]:
         )
         logger.warning("Validation échouée: pas d'en-têtes de colonnes")
 
-    # Check 3: At least one numeric column
+    # Check 3: Log if no numeric columns (but don't block — categorical data is valid)
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-    if len(numeric_cols) == 0:
-        errors.append(
-            "Le fichier ne contient aucune colonne numérique. "
-            "Au moins une colonne avec des valeurs numériques est requise pour l'analyse."
+    categorical_cols = df.select_dtypes(include=["object", "category", "string", "bool"]).columns.tolist()
+    if len(numeric_cols) == 0 and len(categorical_cols) > 0:
+        logger.info(
+            "Le fichier ne contient aucune colonne numérique mais contient %d colonnes catégoriques. "
+            "L'analyse catégorielle sera utilisée.",
+            len(categorical_cols),
         )
-        logger.warning("Validation échouée: aucune colonne numérique")
+    elif len(numeric_cols) == 0 and len(categorical_cols) == 0:
+        errors.append(
+            "Le fichier ne contient aucune colonne exploitable "
+            "(ni numérique ni catégorielle)."
+        )
+        logger.warning("Validation échouée: aucune colonne exploitable")
 
     # Check 4: Not all NaN
     if df.isna().all().all():

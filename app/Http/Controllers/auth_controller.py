@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.Services import auth_service
 from app.Services.audit_service import log_action
+from app.Services.notification_service import NotificationService
 from app.Repositories.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,51 @@ class AuthController:
             jwt.InvalidTokenError: If token is invalid.
         """
         return auth_service.get_current_user(token)
+
+    def forgot_password(self, email: str, base_url: str) -> bool:
+        """Handle a forgot password request by sending an email.
+        
+        Args:
+            email: The user's email address.
+            base_url: The base URL of the application to build the reset link.
+            
+        Returns:
+            True if successful.
+            
+        Raises:
+            ValueError: If the email is unknown or sending fails.
+        """
+        try:
+            # Generate the short-lived JWT token
+            reset_token = auth_service.generate_reset_token(email)
+            
+            # Build the reset link
+            reset_link = f"{base_url}/?reset_token={reset_token}"
+            
+            # Send the email via NotificationService
+            success = NotificationService.send_password_reset_email(email, reset_link)
+            if not success:
+                raise ValueError("Impossible d'envoyer l'e-mail de réinitialisation. Vérifiez la configuration SMTP.")
+                
+            return True
+        except ValueError as e:
+            logger.warning("Demande de réinitialisation échouée pour %s: %s", email, e)
+            raise
+
+    def reset_password(self, token: str, new_password: str) -> bool:
+        """Reset the user's password using the provided token.
+        
+        Args:
+            token: The JWT reset token.
+            new_password: The new plain-text password.
+            
+        Returns:
+            True if successful.
+            
+        Raises:
+            ValueError: If the token is invalid/expired.
+        """
+        return auth_service.reset_password(token, new_password)
 
     def require_admin(self, token: str) -> dict:
         """Verify that the token holder is an admin.

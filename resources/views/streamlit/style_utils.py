@@ -65,7 +65,39 @@ def inject_custom_css() -> None:
         /* Inputs in the main area — readable */
         [data-testid="stMain"] input,
         [data-testid="stMain"] textarea,
-        [data-testid="stMain"] select {{
+        [data-testid="stMain"] select,
+        [data-testid="stMain"] [data-testid="stFileUploaderDropzone"] {{
+            color: {TEXT_COLOR} !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 8px !important;
+        }}
+        [data-testid="stMain"] [data-testid="stFileUploaderDropzone"] * {{
+            color: {TEXT_COLOR} !important;
+        }}
+        [data-testid="stMain"] input:focus,
+        [data-testid="stMain"] textarea:focus,
+        [data-testid="stMain"] select:focus {{
+            border-color: {PRIMARY_COLOR} !important;
+            box-shadow: 0 0 0 2px rgba(147, 220, 92, 0.2) !important;
+        }}
+
+        /* Checkboxes */
+        [data-testid="stMain"] [data-testid="stCheckbox"] label span {{
+            color: {TEXT_COLOR} !important;
+        }}
+
+        /* DataFrames & Expanders */
+        [data-testid="stMain"] [data-testid="stDataFrame"] > div,
+        [data-testid="stMain"] [data-testid="stTable"] {{
+            background-color: #ffffff !important;
+        }}
+        [data-testid="stMain"] [data-testid="stExpander"] {{
+            background-color: #ffffff !important;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 8px !important;
+        }}
+        [data-testid="stMain"] [data-testid="stExpander"] summary * {{
             color: {TEXT_COLOR} !important;
         }}
 
@@ -129,18 +161,24 @@ def inject_custom_css() -> None:
          * 4. MAIN CONTENT BUTTONS (light primary)
          *    Sidebar override above wins for sidebar buttons.
          * ===================================================== */
-        [data-testid="stMain"] div.stButton > button {{
-            background-color: {PRIMARY_COLOR};
+        [data-testid="stMain"] div.stButton > button,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] > button {{
+            background: {PRIMARY_COLOR} !important;
             color: #ffffff !important;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.2s ease;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            transition: all 0.2s ease !important;
         }}
-        [data-testid="stMain"] div.stButton > button:hover {{
-            background-color: {PRIMARY_DARK};
+        [data-testid="stMain"] div.stButton > button *,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] > button * {{
             color: #ffffff !important;
-            box-shadow: 0 4px 14px rgba(147, 220, 92, 0.35);
+        }}
+        [data-testid="stMain"] div.stButton > button:hover,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] > button:hover {{
+            background: {PRIMARY_DARK} !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(147, 220, 92, 0.35) !important;
         }}
 
         /* =====================================================

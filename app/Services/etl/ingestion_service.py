@@ -133,8 +133,24 @@ def _lire_excel(chemin: str, engine: str) -> pd.DataFrame:
         Exception: If the file cannot be read.
     """
     try:
-        df = pd.read_excel(chemin, engine=engine)
-        logger.debug("Excel lu avec moteur '%s': %s", engine, chemin)
+        # sheet_name=None reads all sheets into a dictionary: {sheet_name: DataFrame}
+        sheets_dict = pd.read_excel(chemin, engine=engine, sheet_name=None)
+        
+        combined_dfs = []
+        for sheet_name, sheet_df in sheets_dict.items():
+            if not sheet_df.empty:
+                # Optional: keep track of which sheet the data came from
+                sheet_df["Source_Feuille"] = sheet_name
+                combined_dfs.append(sheet_df)
+                
+        if not combined_dfs:
+            # All sheets were empty
+            df = pd.DataFrame()
+        else:
+            # Concatenate all sheets into a single DataFrame
+            df = pd.concat(combined_dfs, ignore_index=True)
+            
+        logger.debug("Excel lu avec moteur '%s' (%d feuilles combinées): %s", engine, len(combined_dfs), chemin)
         return df
     except Exception as e:
         logger.error("Impossible de lire le fichier Excel %s: %s", chemin, e)
