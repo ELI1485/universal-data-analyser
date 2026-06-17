@@ -71,13 +71,18 @@ def _register_matplotlib_fonts() -> None:
             logger.debug("Police non enregistrée (%s): %s", path, e)
 
 
-def _build_font_face_css() -> str:
-    """Build a <style> block embedding Poppins via @font-face for xhtml2pdf.
+def _build_report_css() -> str:
+    """Build the full premium <style> block for the PDF report.
 
-    Uses absolute file paths because xhtml2pdf resolves @font-face ``src`` URLs
-    against the local filesystem and does NOT support Google Fonts @import.
-    Also sets sensible Poppins-based defaults and styled tables so the whole
-    report keeps a consistent, modern look even if the LLM markup is sparse.
+    Covers the WHOLE document (not just the cover):
+      * Embeds Poppins via @font-face with absolute file paths (xhtml2pdf does
+        not support Google Fonts @import).
+      * Two page templates: a full-bleed, margin-less page for the cover image
+        and a ``content`` page with comfortable margins + a repeating branded
+        footer (page numbers) for every report page.
+      * A consistent, modern type system: hero <h1>, section <h2> with an
+        accent underline + side bar, styled tables (navy headers, zebra rows),
+        callout boxes and chart titles.
     """
     def _src(weight: str) -> str:
         p = _FONT_FILES[weight]
@@ -85,50 +90,132 @@ def _build_font_face_css() -> str:
 
     return f"""
     <style>
-    @font-face {{
-        font-family: 'Poppins';
-        src: url('{_src("regular")}');
-        font-weight: 400;
+    /* xhtml2pdf only addresses @font-face by normal/bold, so we map the two
+       weights actually used in the body. (The cover image uses the full set
+       of weights directly via matplotlib.) */
+    @font-face {{ font-family: 'Poppins'; src: url('{_src("regular")}'); }}
+    @font-face {{ font-family: 'Poppins'; src: url('{_src("bold")}'); font-weight: bold; }}
+
+    /* Page 1 (cover): full bleed, no margins. */
+    @page {{ size: a4 portrait; margin: 0cm; }}
+
+    /* Report content pages: margins + repeating branded footer. */
+    @page content {{
+        size: a4 portrait;
+        margin: 1.7cm 1.5cm 2cm 1.5cm;
+        @frame footer_frame {{
+            -pdf-frame-content: footerContent;
+            left: 1.5cm; right: 1.5cm; bottom: 0.9cm; height: 1cm;
+        }}
     }}
-    @font-face {{
-        font-family: 'Poppins';
-        src: url('{_src("medium")}');
-        font-weight: 500;
-    }}
-    @font-face {{
-        font-family: 'Poppins';
-        src: url('{_src("semibold")}');
-        font-weight: 600;
-    }}
-    @font-face {{
-        font-family: 'Poppins';
-        src: url('{_src("bold")}');
-        font-weight: 700;
-    }}
-    @font-face {{
-        font-family: 'Poppins';
-        src: url('{_src("light")}');
-        font-weight: 300;
-    }}
+
     body, p, td, th, li, h1, h2, h3, h4, h5, span, div {{
         font-family: 'Poppins', sans-serif;
     }}
-    body {{ color: #1f2937; }}
-    h1, h2, h3, h4 {{ color: {_NAVY}; font-weight: 700; }}
-    h2 {{ border-bottom: 2px solid {_ACCENT_GREEN}; padding-bottom: 4px; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+    body {{ color: #2b3440; font-size: 10.5pt; line-height: 1.55; }}
+
+    h1 {{
+        color: {_NAVY}; font-weight: 700; font-size: 21pt;
+        margin: 0 0 4px 0; letter-spacing: -0.3px;
+    }}
+    h2 {{
+        color: {_NAVY}; font-weight: 700; font-size: 14pt;
+        margin: 20px 0 9px 0; padding: 3px 0 5px 10px;
+        border-left: 4px solid {_ACCENT_GREEN};
+        border-bottom: 1.5px solid #e3e9f2;
+    }}
+    h3 {{ color: {_NAVY}; font-weight: 600; font-size: 11.5pt; margin: 13px 0 5px 0; }}
+    h4 {{ color: {_ACCENT_BLUE}; font-weight: 600; font-size: 10.5pt; margin: 10px 0 4px 0; }}
+    p {{ margin: 6px 0; }}
+    ul, ol {{ margin: 6px 0 6px 4px; }}
+    li {{ margin: 3px 0; }}
+    a {{ color: {_ACCENT_BLUE}; text-decoration: none; }}
+    strong, b {{ color: {_NAVY}; }}
+
+    /* Slim intro ribbon shown once at the top of the content (table-based so
+       the navy background renders as one solid band in xhtml2pdf). */
+    .report-head {{ width: 100%; margin: 0 0 16px 0; border-collapse: collapse; }}
+    .report-head td {{
+        background-color: {_NAVY}; color: #ffffff; border: 0;
+        padding: 10px 16px; font-size: 9.5pt;
+    }}
+    .report-head .rh-name {{ color: #ffffff; font-weight: bold; }}
+    .report-head .rh-bar {{ color: {_ACCENT_GREEN}; }}
+    .report-head .rh-right {{ text-align: right; color: {_ACCENT_GREEN}; font-weight: bold; }}
+
+    table {{ border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9.5pt; }}
     th {{
         background-color: {_NAVY}; color: #ffffff; font-weight: 600;
         padding: 7px 9px; text-align: left;
     }}
     td {{ padding: 6px 9px; border-bottom: 1px solid #e5e7eb; }}
     tr:nth-child(even) td {{ background-color: #f3f6fb; }}
+
     h3.chart-title {{
-        color: {_NAVY}; font-weight: 600; font-size: 14px;
-        margin: 14px 0 6px 0;
+        color: {_NAVY}; font-weight: 600; font-size: 11.5pt;
+        margin: 14px 0 6px 0; padding-left: 8px;
+        border-left: 3px solid {_ACCENT_BLUE};
     }}
+
+    .footer {{
+        border-top: 1px solid #d8e0ec; color: {_MUTED};
+        font-size: 8pt; padding-top: 4px;
+    }}
+    .footer .brand {{ color: {_NAVY}; font-weight: 600; }}
+    .footer .accent {{ color: {_ACCENT_GREEN}; }}
     </style>
     """
+
+
+def _build_footer_html(dataset_name: str) -> str:
+    """Return the repeating page footer (pulled into the @page footer frame)."""
+    safe = (str(dataset_name) or "")[:60]
+    return (
+        "<div id='footerContent'>"
+        "<table class='footer' style='border:0; margin:0;'>"
+        "<tr>"
+        "<td style='border:0; background:transparent; text-align:left; padding:4px 0;'>"
+        "<span class='brand'>Universal Data Analyzer</span> "
+        f"<span class='accent'>&bull;</span> {safe}"
+        "</td>"
+        "<td style='border:0; background:transparent; text-align:right; padding:4px 0;'>"
+        "Page <pdf:pagenumber> / <pdf:pagecount>"
+        "</td>"
+        "</tr></table>"
+        "</div>"
+    )
+
+
+def _build_report_head_html(dataset_name: str, nb_rows, nb_cols, date_str: str) -> str:
+    """Return the one-time slim intro ribbon shown at the top of the report."""
+    return (
+        "<table class='report-head'><tr>"
+        "<td>"
+        "<span class='rh-bar'>&#9608;</span> "
+        f"<span class='rh-name'>{dataset_name}</span>"
+        f"&nbsp;&nbsp;&middot;&nbsp;&nbsp; {nb_rows} lignes &times; {nb_cols} colonnes"
+        f"&nbsp;&nbsp;&middot;&nbsp;&nbsp; {date_str}"
+        "</td>"
+        "<td class='rh-right'>Rapport d'Analyse</td>"
+        "</tr></table>"
+    )
+
+
+def _resolve_user_label(user_id: int) -> str:
+    """Resolve a human-readable author name for the cover from the user record.
+
+    Falls back to ``Utilisateur #<id>`` if the user can't be loaded so the
+    report never fails just because of a missing name.
+    """
+    try:
+        from app.Repositories.user_repository import UserRepository
+
+        user = UserRepository().find_by_id(user_id)
+        if user and getattr(user, "nom", None):
+            return str(user.nom)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Impossible de résoudre le nom d'utilisateur %s: %s", user_id, e)
+    return f"Utilisateur #{user_id}"
 
 
 def _generate_cover_image(
@@ -272,9 +359,11 @@ def _generate_cover_page_html(cover_image_path: str | None) -> str:
     if not cover_image_path:
         return ""
     abs_path = os.path.abspath(cover_image_path).replace("\\", "/")
+    # Full-bleed cover image. The page switch to the bordered "content"
+    # template (with footer) is emitted separately by the caller.
     return (
-        "<div style='page-break-after: always; text-align: center; margin: 0; padding: 0;'>"
-        f"<img src='{abs_path}' style='width: 100%; height: auto;' />"
+        "<div style='text-align: center; margin: 0; padding: 0;'>"
+        f"<img src='{abs_path}' style='width: 21cm; height: 29.7cm;' />"
         "</div>"
     )
 
@@ -342,55 +431,75 @@ def generer(
     llm = LLMService()
     html_content = llm.generer_rapport_html(context)
 
-    # 2b. Render the premium cover page image (navy + Poppins).
+    date_str = datetime.now().strftime("%d/%m/%Y")
+
+    # 2b. Render the premium cover page image (navy + Poppins). The author name
+    # is resolved dynamically from the user record (falls back gracefully).
     cover_dir = Path(EXPORT_DIR) / "temp_charts"
     cover_dir.mkdir(parents=True, exist_ok=True)
-    user_label = dataset_info.get("user_nom") or f"Utilisateur #{user_id}"
+    user_label = _resolve_user_label(user_id)
     cover_path = _generate_cover_image(
         dataset_name=dataset_name,
         nb_rows=nb_rows,
         nb_cols=nb_cols,
         user_label=user_label,
-        date_str=datetime.now().strftime("%d/%m/%Y"),
+        date_str=date_str,
         export_dir=cover_dir,
     )
     cover_html = _generate_cover_page_html(cover_path)
 
-    # Inject the cover right after the opening <body> tag.
+    # Build the report intro band (shown once at the top of the content pages).
+    head_band = _build_report_head_html(dataset_name, nb_rows, nb_cols, date_str)
+
+    # The cover lives on a full-bleed page; then we switch to the bordered
+    # "content" page template (with the repeating footer) for everything else.
     if cover_html:
-        if "<body>" in html_content:
-            html_content = html_content.replace("<body>", f"<body>{cover_html}", 1)
-        elif "<body" in html_content:
-            # <body ...> with attributes — insert after the tag close.
-            idx = html_content.find("<body")
-            close = html_content.find(">", idx)
-            if close != -1:
-                html_content = (
-                    html_content[: close + 1] + cover_html + html_content[close + 1 :]
-                )
-        else:
-            html_content = cover_html + html_content
+        body_prefix = (
+            f"{cover_html}"
+            "<pdf:nexttemplate name='content'>"
+            "<pdf:nextpage>"
+            f"{head_band}"
+        )
+    else:
+        body_prefix = head_band
+
+    if "<body>" in html_content:
+        html_content = html_content.replace("<body>", f"<body>{body_prefix}", 1)
+    elif "<body" in html_content:
+        idx = html_content.find("<body")
+        close = html_content.find(">", idx)
+        if close != -1:
+            html_content = (
+                html_content[: close + 1] + body_prefix + html_content[close + 1 :]
+            )
+    else:
+        html_content = body_prefix + html_content
 
     # 3. Generate Charts and append them to the HTML
     chart_images = _generate_charts(analytics, anomalies, selected_charts, max_charts)
 
+    # Footer content (pulled into the @page footer frame on every content page).
+    footer_html = _build_footer_html(dataset_name)
+
+    tail_html = ""
     if chart_images:
-        charts_html = "<div style='page-break-before: always;'><h2>Visualisations</h2>"
+        tail_html += "<div style='page-break-before: always;'><h2>Visualisations</h2>"
         for title, path in chart_images:
             # xhtml2pdf requires absolute paths for local images
             abs_path = os.path.abspath(path).replace("\\", "/")
-            charts_html += f"<h3 class='chart-title'>{title}</h3>"
-            charts_html += f"<img src='{abs_path}' style='width: 600px; max-width: 100%; margin-bottom: 20px;' />"
-        charts_html += "</div>"
+            tail_html += f"<h3 class='chart-title'>{title}</h3>"
+            tail_html += f"<img src='{abs_path}' style='width: 600px; max-width: 100%; margin-bottom: 20px;' />"
+        tail_html += "</div>"
+    tail_html += footer_html
 
-        # Inject charts right before the closing </body> tag
-        if "</body>" in html_content:
-            html_content = html_content.replace("</body>", f"{charts_html}</body>")
-        else:
-            html_content += charts_html
+    # Inject charts + footer right before the closing </body> tag
+    if "</body>" in html_content:
+        html_content = html_content.replace("</body>", f"{tail_html}</body>")
+    else:
+        html_content += tail_html
 
-    # 3b. Embed Poppins (@font-face) + base styling into the <head>.
-    font_css = _build_font_face_css()
+    # 3b. Embed Poppins (@font-face) + full premium template styling.
+    font_css = _build_report_css()
     if "</head>" in html_content:
         html_content = html_content.replace("</head>", f"{font_css}</head>", 1)
     elif "<head>" in html_content:
