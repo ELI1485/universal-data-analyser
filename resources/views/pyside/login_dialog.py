@@ -33,6 +33,7 @@ class LoginDialog(QDialog):
     """
 
     login_success = Signal(dict)
+    register_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         """Initialize the login dialog.
@@ -129,6 +130,13 @@ class LoginDialog(QDialog):
         
         # --- RIGHT PANEL ---
         right_panel = QFrame()
+        # Give the panel an explicit white background so its dark labels never
+        # render white-on-white when global stylesheets change.
+        right_panel.setObjectName("RightPanel")
+        right_panel.setStyleSheet(
+            "#RightPanel { background-color: white;"
+            " border-top-right-radius: 20px; border-bottom-right-radius: 20px; }"
+        )
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(50, 20, 50, 40)
         
@@ -178,7 +186,24 @@ class LoginDialog(QDialog):
         self._login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._login_btn.clicked.connect(self._on_login_clicked)
         right_layout.addWidget(self._login_btn)
-        
+
+        right_layout.addSpacing(12)
+
+        # Register prompt (mirrors Streamlit's "Don't have an account? Create one")
+        register_row = QHBoxLayout()
+        register_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        register_hint = QLabel("Vous n'avez pas de compte ?")
+        register_hint.setStyleSheet("color: #555555; background: transparent; border: none;")
+        register_row.addWidget(register_hint)
+
+        self._register_btn = QPushButton("Créer un compte")
+        self._register_btn.setObjectName("register_btn")
+        self._register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._register_btn.setFlat(True)
+        self._register_btn.clicked.connect(self._on_register_clicked)
+        register_row.addWidget(self._register_btn)
+        right_layout.addLayout(register_row)
+
         right_layout.addStretch()
         
         # Footer
@@ -214,8 +239,31 @@ class LoginDialog(QDialog):
             QPushButton#login_btn:hover {
                 background-color: #7ab84d;
             }
+            QPushButton#register_btn {
+                background: transparent;
+                color: #4e732d;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+                padding: 0px;
+                text-decoration: underline;
+            }
+            QPushButton#register_btn:hover {
+                color: #93DC5C;
+            }
         """)
         self._login_btn.setObjectName("login_btn")
+
+    def _on_register_clicked(self) -> None:
+        """Handle the "Créer un compte" link click.
+
+        Emits ``register_requested`` so the main window can open the
+        registration dialog, then closes the login dialog.
+        """
+        self.register_requested.emit()
+        # Close the login dialog with a "rejected" code; the main window
+        # listens to register_requested to decide what to show next.
+        self.reject()
 
     def _on_login_clicked(self) -> None:
         """Handle login button click."""

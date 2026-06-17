@@ -19,8 +19,19 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QScrollArea,
     QFrame,
+    QCheckBox,
+    QSpinBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal
+
+# Diagram options offered to the user (kept in sync with the Streamlit page).
+CHART_OPTIONS = [
+    "Histogramme de distribution",
+    "Anomalies par algorithme",
+    "Matrice de corrélation",
+    "Boîte à moustaches (Boxplot)",
+    "Distribution catégorielle",
+]
 
 from app.Http.Controllers.report_controller import ReportController
 from app.Http.Controllers.upload_controller import UploadController
@@ -33,18 +44,31 @@ class ReportWorker(QThread):
     finished = Signal(object)
     error = Signal(str)
 
-    def __init__(self, dataset_id: int, user_id: int, format: str) -> None:
+    def __init__(
+        self,
+        dataset_id: int,
+        user_id: int,
+        format: str,
+        selected_charts: list[str] | None = None,
+        max_charts: int | None = None,
+    ) -> None:
         super().__init__()
         self._dataset_id = dataset_id
         self._user_id = user_id
         self._format = format
+        self._selected_charts = selected_charts
+        self._max_charts = max_charts
         self._report_ctrl = ReportController()
 
     def run(self) -> None:
         """Generate report in background."""
         try:
             report = self._report_ctrl.generer(
-                self._dataset_id, self._user_id, self._format
+                self._dataset_id,
+                self._user_id,
+                self._format,
+                selected_charts=self._selected_charts,
+                max_charts=self._max_charts,
             )
             self.finished.emit(report)
         except Exception as e:
@@ -119,6 +143,36 @@ class ReportWidget(QWidget):
         format_layout.addWidget(self._excel_radio)
         format_layout.addStretch()
         layout.addLayout(format_layout)
+
+        # Diagram selection
+        charts_label = QLabel("Diagrammes à inclure")
+        charts_label.setStyleSheet("font-weight: bold; background: transparent; border: none; margin-top: 8px;")
+        layout.addWidget(charts_label)
+
+        charts_frame = QFrame()
+        charts_frame.setStyleSheet("QFrame { background: white; border-radius: 8px; border: 1px solid #e0e0e0; }")
+        charts_layout = QVBoxLayout(charts_frame)
+        charts_layout.setContentsMargins(15, 10, 15, 10)
+        self._chart_checks: list[QCheckBox] = []
+        for label in CHART_OPTIONS:
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            charts_layout.addWidget(cb)
+            self._chart_checks.append(cb)
+        layout.addWidget(charts_frame)
+
+        # Max diagrams
+        max_layout = QHBoxLayout()
+        max_label = QLabel("Nombre maximum de diagrammes")
+        max_label.setStyleSheet("font-weight: bold; background: transparent; border: none;")
+        max_layout.addWidget(max_label)
+        self._max_charts_spin = QSpinBox()
+        self._max_charts_spin.setRange(1, 10)
+        self._max_charts_spin.setValue(min(5, len(CHART_OPTIONS)))
+        self._max_charts_spin.setFixedWidth(80)
+        max_layout.addWidget(self._max_charts_spin)
+        max_layout.addStretch()
+        layout.addLayout(max_layout)
 
         # Generate button
         self._generate_btn = QPushButton("Generer le rapport")
@@ -214,12 +268,22 @@ class ReportWidget(QWidget):
         dataset_id = self._dataset_combo.currentData()
         format_val = "pdf" if self._pdf_radio.isChecked() else "excel"
 
+        selected_charts = [cb.text() for cb in self._chart_checks if cb.isChecked()]
+        if not selected_charts:
+            QMessageBox.warning(
+                self, "Attention", "Sélectionnez au moins un diagramme à inclure."
+            )
+            return
+        max_charts = self._max_charts_spin.value()
+
         self._generate_btn.setEnabled(False)
         self._progress.setVisible(True)
         self._status_label.setText("Generation en cours...")
         self._status_label.setStyleSheet("color: #31333f; background: transparent; border: none;")
 
-        self._worker = ReportWorker(dataset_id, self._user_id, format_val)
+        self._worker = ReportWorker(
+            dataset_id, self._user_id, format_val, selected_charts, max_charts
+        )
         self._worker.finished.connect(self._on_generate_success)
         self._worker.error.connect(self._on_generate_error)
         self._worker.start()

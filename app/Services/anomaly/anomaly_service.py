@@ -15,6 +15,7 @@ from app.Repositories.anomaly_repository import AnomalyRepository
 from app.Services.anomaly.zscore_detector import detecter as detecter_zscore
 from app.Services.anomaly.iqr_detector import detecter as detecter_iqr
 from app.Services.anomaly.isolation_detector import detecter as detecter_isolation
+from app.Services.etl.etl_service import verifier_fichier_dataset
 from app.Services.audit_service import log_action, log_error
 from app.Services.notification_service import NotificationService
 
@@ -57,7 +58,8 @@ def detecter_toutes(dataset_id: int) -> dict:
     )
 
     try:
-        # Read the file
+        # Read the file (verify it still exists for a clear error)
+        verifier_fichier_dataset(dataset)
         df = pd.read_csv(dataset.chemin_fichier, encoding="utf-8")
 
         # Run all detectors in parallel

@@ -154,6 +154,25 @@ def _render_statistics_tab(analytics: dict) -> None:
     """Render the statistics tab content."""
     st.markdown("### Statistiques descriptives")
 
+    # Multi-sheet (Excel) breakdown, when the import combined several feuilles.
+    sheet_breakdown = analytics.get("sheet_breakdown") or {}
+    if len(sheet_breakdown) > 1:
+        noms = ", ".join(sheet_breakdown.keys())
+        st.info(
+            f"Ce fichier contient **{len(sheet_breakdown)} feuilles**: {noms}"
+        )
+        breakdown_df = pd.DataFrame(
+            [
+                {
+                    "Feuille": nom,
+                    "Lignes": infos.get("nb_lignes", 0),
+                    "Colonnes": infos.get("nb_colonnes", 0),
+                }
+                for nom, infos in sheet_breakdown.items()
+            ]
+        )
+        st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+
     kpis = analytics.get("kpis", {})
     if kpis:
         col1, col2, col3, col4 = st.columns(4)

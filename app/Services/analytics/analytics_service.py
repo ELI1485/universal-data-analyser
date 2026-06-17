@@ -12,6 +12,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 from app.Repositories.dataset_repository import DatasetRepository
+from app.Services.etl.etl_service import verifier_fichier_dataset
 from app.Services.analytics.descriptive_statistics import calculer
 from app.Services.analytics.trend_analysis import analyser_tendances
 from app.Services.analytics.kpi_engine import calculer_kpis
@@ -58,8 +59,14 @@ def analyser(dataset_id: int) -> dict:
     logger.info("Lancement des analyses pour dataset '%s' (ID=%d)", dataset.nom, dataset_id)
 
     try:
-        # Step 2: Read the file
+        # Step 2: Read the file (verify it still exists for a clear error)
+        verifier_fichier_dataset(dataset)
         df = pd.read_csv(dataset.chemin_fichier, encoding="utf-8")
+
+        # Step 2b: Per-sheet breakdown for multi-sheet Excel imports.
+        # The ETL pipeline tags each original sheet with a source column so we
+        # can report exactly how many "feuilles"/filières were detected.
+        sheet_breakdown = _build_sheet_breakdown(df)
 
         # Step 3: Descriptive statistics
         logger.info("Calcul des statistiques descriptives...")
@@ -109,6 +116,11 @@ def analyser(dataset_id: int) -> dict:
             "multicollinearite": multicollinearite,
         }
 
+        # Attach the multi-sheet breakdown when available so the UI can show
+        # e.g. "3 feuilles détectées: GI (150 lignes), GE (120), GM (130)".
+        if sheet_breakdown:
+            result["sheet_breakdown"] = sheet_breakdown
+
         logger.info("Analyses terminées avec succès pour dataset ID=%d", dataset_id)
         return result
 
@@ -121,6 +133,61 @@ def analyser(dataset_id: int) -> dict:
             ip=None,
         )
         raise
+
+
+def _find_source_column(df: pd.DataFrame) -> str | None:
+    """Return the sheet-origin column name, matching case-insensitively.
+
+    The ETL ingestion tags multi-sheet Excel files with a ``Source_Feuille``
+    column. The cleaning step lowercases column names, so by the time the
+    analytics pipeline reads the cleaned CSV the column may be
+    ``source_feuille``. This helper finds it regardless of casing.
+
+    Args:
+        df: The cleaned DataFrame.
+
+    Returns:
+        The actual column name if present, otherwise ``None``.
+    """
+    for col in df.columns:
+        if str(col).strip().lower() == "source_feuille":
+            return col
+    return None
+
+
+def _build_sheet_breakdown(df: pd.DataFrame) -> dict:
+    """Build a per-sheet row/column breakdown for multi-sheet imports.
+
+    Args:
+        df: The cleaned DataFrame, possibly carrying a source-sheet column.
+
+    Returns:
+        A dict mapping each original sheet name to its ``nb_lignes`` and
+        ``nb_colonnes`` (excluding the source column). Empty when the dataset
+        does not come from a multi-sheet Excel file.
+    """
+    source_col = _find_source_column(df)
+    if source_col is None:
+        return {}
+
+    breakdown: dict = {}
+    try:
+        for sheet_name, sheet_df in df.groupby(source_col):
+            breakdown[str(sheet_name)] = {
+                "nb_lignes": int(len(sheet_df)),
+                "nb_colonnes": int(len(sheet_df.columns) - 1),  # exclude source col
+            }
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Erreur lors du calcul du breakdown par feuille: %s", e)
+        return {}
+
+    if len(breakdown) > 1:
+        logger.info(
+            "%d feuilles détectées dans le dataset: %s",
+            len(breakdown),
+            ", ".join(breakdown.keys()),
+        )
+    return breakdown
 
 
 def _run_clustering(df: pd.DataFrame, n_clusters: int = 3) -> dict:

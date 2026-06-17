@@ -327,13 +327,23 @@ Lignes: {nb_rows} | Colonnes: {nb_cols}
 
 === INSTRUCTIONS ===
 1. Génère un document HTML complet avec les balises <html>, <head>, et <body>.
-2. Dans le <head>, inclus un bloc <style> avec CSS pour un design professionnel, moderne et propre (utilise des polices sans-serif comme Arial ou Helvetica, des couleurs professionnelles comme le bleu marine #1a237e).
+2. Dans le <head>, inclus un bloc <style> avec un CSS professionnel, moderne et épuré:
+   - Police: utilise impérativement font-family: 'Poppins', sans-serif pour tout le texte
+     (la police Poppins est déjà intégrée au PDF, ne fais PAS de @import ni d'appel à
+     Google Fonts car cela ne fonctionne pas dans le moteur de rendu).
+   - Palette de couleurs: bleu marine foncé #0A1628 pour les titres, bleu d'accent
+     #3B82F6 et vert d'accent #10B981 pour les éléments mis en valeur. Texte courant
+     en gris foncé (#1f2937).
+   - Tableaux soignés: en-têtes <th> sur fond bleu marine #0A1628 en blanc, coins
+     légèrement arrondis, lignes alternées (zébrées) pour la lisibilité, padding confortable.
+   - Titres <h2> avec une fine bordure inférieure verte (#10B981).
 3. Le <body> doit contenir:
    - Un titre principal <h1>
    - Une section "Résumé Exécutif"
    - Une section "Analyse de la Qualité des Données" (basé sur le nombre de lignes et les statistiques)
    - Une section "Insights Clés et Tendances"
    - Une section "Conclusion et Recommandations"
-4. Utilise des tableaux HTML (<table>, <tr>, <td>) si tu veux résumer des chiffres importants.
-5. NE RÉPONDS QU'AVEC DU CODE HTML. AUCUN TEXTE AVANT OU APRÈS LE CODE HTML.
+4. Utilise des tableaux HTML (<table>, <tr>, <th>, <td>) pour résumer les chiffres importants.
+5. Pour tout titre de graphique éventuel, utilise <h3 class="chart-title">...</h3>.
+6. NE RÉPONDS QU'AVEC DU CODE HTML. AUCUN TEXTE AVANT OU APRÈS LE CODE HTML.
 """
