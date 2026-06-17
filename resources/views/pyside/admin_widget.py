@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from app.Http.Controllers.admin_controller import AdminController
+from app.Services.auth_service import generer_mot_de_passe_temporaire
 from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
 
 
@@ -366,8 +367,17 @@ class AdminWidget(QWidget):
 
     def _on_reset(self, uid: int) -> None:
         try:
-            self._admin_ctrl.reinitialiser_mdp(uid, "NewPass123!")
-            QMessageBox.information(self, "Succès", "Mot de passe réinitialisé: NewPass123!")
+            # Générer un mot de passe temporaire aléatoire et sûr (jamais codé en dur).
+            temp_pass = generer_mot_de_passe_temporaire()
+            self._admin_ctrl.reinitialiser_mdp(uid, temp_pass)
+            QMessageBox.information(
+                self,
+                "Succès",
+                "Mot de passe réinitialisé.\n\n"
+                f"Mot de passe temporaire : {temp_pass}\n\n"
+                "Communiquez-le à l'utilisateur de manière sécurisée. "
+                "Il devra le changer à la prochaine connexion.",
+            )
         except Exception as e:
             QMessageBox.critical(self, "Erreur", str(e))
 

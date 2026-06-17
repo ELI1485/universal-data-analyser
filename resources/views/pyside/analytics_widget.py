@@ -22,13 +22,22 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QScrollArea,
     QFrame,
+    QDialog,
 )
 from PySide6.QtCore import Qt, QThread, Signal
+
+import os
 
 from app.Http.Controllers.analytics_controller import AnalyticsController
 from app.Http.Controllers.upload_controller import UploadController
 from app.Services.llm_service import LLMService
-from app.Services.visualization.visualization_service import histogramme_mpl, heatmap_mpl
+from app.Repositories.dataset_repository import DatasetRepository
+from app.Services.visualization.visualization_service import (
+    histogramme_mpl,
+    heatmap_mpl,
+    boxplot_mpl,
+    bar_categorical_mpl,
+)
 from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
 
 
@@ -73,9 +82,12 @@ class AnalyticsWidget(QWidget):
         self._user_id = user_id
         self._role = role
         self._upload_ctrl = UploadController()
+        self._ds_repo = DatasetRepository()
         self._datasets = []
         self._results = None
         self._worker = None
+        self._viz_df = None  # DataFrame loaded for the Visualisations tab
+        self._viz_figures = []  # Track matplotlib figures to close on refresh
         self._setup_ui()
         self._load_datasets()
 
@@ -104,6 +116,14 @@ class AnalyticsWidget(QWidget):
         self._dataset_combo = QComboBox()
         self._dataset_combo.setFixedHeight(40)
         selector_layout.addWidget(self._dataset_combo, stretch=1)
+
+        # Preview button — lets the user inspect the raw data before analysis.
+        self._preview_btn = QPushButton("Aperçu")
+        self._preview_btn.setFixedHeight(40)
+        self._preview_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._preview_btn.setToolTip("Afficher les 10 premières lignes du dataset")
+        self._preview_btn.clicked.connect(self._on_preview)
+        selector_layout.addWidget(self._preview_btn)
 
         self._run_btn = QPushButton("Lancer l'analyse")
         self._run_btn.setFixedHeight(40)
@@ -205,6 +225,9 @@ class AnalyticsWidget(QWidget):
 
         self._tabs.addTab(insights_widget, "Insights IA")
 
+        # Tab 4: Visualisations (charts — parity with the Streamlit app)
+        self._tabs.addTab(self._build_visualizations_tab(), "Visualisations")
+
         layout.addWidget(self._tabs)
         layout.addStretch()
 
@@ -225,6 +248,67 @@ class AnalyticsWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Erreur", f"Erreur chargement datasets: {e}")
 
+    @staticmethod
+    def _read_dataframe(path: str, nrows: int | None = None) -> pd.DataFrame:
+        """Read a dataset file (CSV or Excel) into a DataFrame.
+
+        Args:
+            path: Filesystem path to the dataset.
+            nrows: Optional limit on the number of rows to read.
+
+        Returns:
+            The loaded DataFrame.
+        """
+        if str(path).lower().endswith((".xlsx", ".xls")):
+            return pd.read_excel(path, nrows=nrows)
+        return pd.read_csv(path, nrows=nrows)
+
+    def _selected_dataset(self):
+        """Return the currently selected Dataset model, or None."""
+        dataset_id = self._dataset_combo.currentData()
+        if dataset_id is None:
+            return None
+        return self._ds_repo.find_by_id(dataset_id)
+
+    def _on_preview(self) -> None:
+        """Show the first 10 rows of the selected dataset in a popup table."""
+        dataset = self._selected_dataset()
+        if not dataset:
+            QMessageBox.warning(self, "Attention", "Sélectionnez un dataset.")
+            return
+        if not dataset.chemin_fichier or not os.path.exists(dataset.chemin_fichier):
+            QMessageBox.warning(
+                self, "Fichier introuvable",
+                "Le fichier est introuvable. Veuillez ré-importer le dataset.",
+            )
+            return
+        try:
+            df = self._read_dataframe(dataset.chemin_fichier, nrows=10)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Impossible de lire l'aperçu: {e}")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Aperçu — {dataset.nom}")
+        dialog.resize(820, 360)
+        dlg_layout = QVBoxLayout(dialog)
+
+        caption = QLabel(f"Affichage de {len(df)} lignes sur {dataset.nb_lignes}")
+        caption.setStyleSheet("font-weight: bold; padding: 4px;")
+        dlg_layout.addWidget(caption)
+
+        table = QTableWidget()
+        table.setColumnCount(len(df.columns))
+        table.setRowCount(len(df))
+        table.setHorizontalHeaderLabels([str(c) for c in df.columns])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.setAlternatingRowColors(True)
+        for r in range(len(df)):
+            for c in range(len(df.columns)):
+                table.setItem(r, c, QTableWidgetItem(str(df.iat[r, c])))
+        dlg_layout.addWidget(table)
+        dialog.exec()
+
     def _on_run_analysis(self) -> None:
         """Handle run analysis button click."""
         idx = self._dataset_combo.currentIndex()
@@ -233,6 +317,7 @@ class AnalyticsWidget(QWidget):
             return
 
         dataset_id = self._dataset_combo.currentData()
+        self._current_dataset_id = dataset_id
 
         self._run_btn.setEnabled(False)
         self._progress.setVisible(True)
@@ -251,6 +336,7 @@ class AnalyticsWidget(QWidget):
         self._display_statistics(results.get("analytics", {}))
         self._display_anomalies(results.get("anomalies", {}))
         self._display_insights(results)
+        self._populate_visualizations(getattr(self, "_current_dataset_id", None))
 
     def _on_analysis_error(self, error_msg: str) -> None:
         """Handle analysis error."""
@@ -378,6 +464,159 @@ class AnalyticsWidget(QWidget):
             self._insights_text.setText(insights)
         except Exception as e:
             self._insights_text.setText(f"Erreur generation insights: {e}")
+
+    # ------------------------------------------------------------------
+    # Visualisations tab (charts) — parity with the Streamlit app
+    # ------------------------------------------------------------------
+    def _build_visualizations_tab(self) -> QWidget:
+        """Build the Visualisations tab (column selectors + chart area)."""
+        viz_widget = QWidget()
+        viz_layout = QVBoxLayout(viz_widget)
+        viz_layout.setContentsMargins(10, 10, 10, 10)
+        viz_layout.setSpacing(10)
+
+        # Column selectors
+        controls = QHBoxLayout()
+        num_lbl = QLabel("Colonne numérique:")
+        num_lbl.setStyleSheet("font-weight: bold; background: transparent; border: none;")
+        controls.addWidget(num_lbl)
+        self._viz_num_combo = QComboBox()
+        self._viz_num_combo.setMinimumWidth(180)
+        self._viz_num_combo.currentIndexChanged.connect(self._refresh_visualizations)
+        controls.addWidget(self._viz_num_combo)
+
+        cat_lbl = QLabel("Colonne catégorielle:")
+        cat_lbl.setStyleSheet("font-weight: bold; background: transparent; border: none;")
+        controls.addWidget(cat_lbl)
+        self._viz_cat_combo = QComboBox()
+        self._viz_cat_combo.setMinimumWidth(180)
+        self._viz_cat_combo.currentIndexChanged.connect(self._refresh_visualizations)
+        controls.addWidget(self._viz_cat_combo)
+        controls.addStretch()
+        viz_layout.addLayout(controls)
+
+        # Placeholder / chart container
+        self._viz_placeholder = QLabel(
+            "Lancez une analyse pour afficher les visualisations."
+        )
+        self._viz_placeholder.setStyleSheet("color: #888; padding: 20px;")
+        self._viz_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        viz_layout.addWidget(self._viz_placeholder)
+
+        self._viz_charts_layout = QVBoxLayout()
+        self._viz_charts_layout.setSpacing(16)
+        viz_layout.addLayout(self._viz_charts_layout)
+        viz_layout.addStretch()
+
+        return viz_widget
+
+    def _make_chart_frame(self, title: str, fig) -> QFrame:
+        """Wrap a matplotlib figure in a titled, white-background frame."""
+        frame = QFrame()
+        frame.setStyleSheet(
+            "QFrame { background-color: white; border: 1px solid #e0e0e0; "
+            "border-radius: 8px; }"
+        )
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(12, 10, 12, 12)
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(
+            "font-weight: bold; font-size: 14px; color: #1a237e; "
+            "background: transparent; border: none;"
+        )
+        fl.addWidget(title_lbl)
+        canvas = FigureCanvas(fig)
+        canvas.setMinimumHeight(320)
+        fl.addWidget(canvas)
+        self._viz_figures.append(fig)
+        return frame
+
+    def _populate_visualizations(self, dataset_id) -> None:
+        """Load the dataset and populate the visualisation column selectors."""
+        self._viz_df = None
+        if dataset_id is None:
+            return
+        try:
+            dataset = self._ds_repo.find_by_id(dataset_id)
+            if not dataset or not dataset.chemin_fichier or not os.path.exists(
+                dataset.chemin_fichier
+            ):
+                self._viz_placeholder.setText(
+                    "Fichier introuvable. Impossible d'afficher les visualisations."
+                )
+                self._viz_placeholder.setVisible(True)
+                return
+            self._viz_df = self._read_dataframe(dataset.chemin_fichier)
+        except Exception as e:
+            self._viz_placeholder.setText(f"Erreur de chargement des données: {e}")
+            self._viz_placeholder.setVisible(True)
+            return
+
+        df = self._viz_df
+        numeric_cols = list(df.select_dtypes(include=["number"]).columns)
+        categorical_cols = [c for c in df.columns if c not in numeric_cols]
+
+        # Block signals while repopulating to avoid premature refreshes.
+        self._viz_num_combo.blockSignals(True)
+        self._viz_cat_combo.blockSignals(True)
+        self._viz_num_combo.clear()
+        self._viz_num_combo.addItems([str(c) for c in numeric_cols])
+        self._viz_cat_combo.clear()
+        self._viz_cat_combo.addItems([str(c) for c in categorical_cols])
+        self._viz_num_combo.blockSignals(False)
+        self._viz_cat_combo.blockSignals(False)
+
+        self._refresh_visualizations()
+
+    def _refresh_visualizations(self) -> None:
+        """Render the four charts based on the current column selections."""
+        if self._viz_df is None:
+            return
+
+        # Close previous figures and clear the chart container.
+        for fig in self._viz_figures:
+            try:
+                plt.close(fig)
+            except Exception:
+                pass
+        self._viz_figures = []
+        self._clear_layout(self._viz_charts_layout)
+        self._viz_placeholder.setVisible(False)
+
+        df = self._viz_df
+        num_col = self._viz_num_combo.currentText()
+        cat_col = self._viz_cat_combo.currentText()
+
+        try:
+            if num_col and num_col in df.columns:
+                self._viz_charts_layout.addWidget(
+                    self._make_chart_frame(
+                        f"Histogramme — {num_col}", histogramme_mpl(df, num_col)
+                    )
+                )
+                self._viz_charts_layout.addWidget(
+                    self._make_chart_frame(
+                        f"Boîte à moustaches — {num_col}", boxplot_mpl(df, num_col)
+                    )
+                )
+
+            if len(df.select_dtypes(include=["number"]).columns) >= 2:
+                self._viz_charts_layout.addWidget(
+                    self._make_chart_frame(
+                        "Matrice de corrélation", heatmap_mpl(df)
+                    )
+                )
+
+            if cat_col and cat_col in df.columns:
+                self._viz_charts_layout.addWidget(
+                    self._make_chart_frame(
+                        f"Fréquence — {cat_col}", bar_categorical_mpl(df, cat_col)
+                    )
+                )
+        except Exception as e:
+            err = QLabel(f"Erreur lors du rendu des graphiques: {e}")
+            err.setStyleSheet("color: #e53935; padding: 10px;")
+            self._viz_charts_layout.addWidget(err)
 
     def _clear_layout(self, layout):
         """Remove all widgets from a layout."""

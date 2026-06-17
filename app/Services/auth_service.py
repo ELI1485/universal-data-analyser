@@ -5,6 +5,8 @@ and role-based access control.
 """
 
 import logging
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -36,6 +38,38 @@ def hash_password(plain: str) -> str:
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(plain.encode("utf-8"), salt)
     return hashed.decode("utf-8")
+
+
+def generer_mot_de_passe_temporaire(longueur: int = 12) -> str:
+    """Génère un mot de passe temporaire aléatoire et cryptographiquement sûr.
+
+    Utilisé lors de la réinitialisation d'un mot de passe par un administrateur,
+    afin d'éviter tout mot de passe codé en dur. Garantit la présence d'au moins
+    une minuscule, une majuscule, un chiffre et un caractère spécial.
+
+    Args:
+        longueur: Longueur du mot de passe (minimum 8).
+
+    Returns:
+        Le mot de passe temporaire en clair (à communiquer à l'utilisateur).
+    """
+    longueur = max(8, longueur)
+    minuscules = string.ascii_lowercase
+    majuscules = string.ascii_uppercase
+    chiffres = string.digits
+    speciaux = "!@#$%"
+    alphabet = minuscules + majuscules + chiffres + speciaux
+
+    # Garantir au moins un caractère de chaque catégorie.
+    base = [
+        secrets.choice(minuscules),
+        secrets.choice(majuscules),
+        secrets.choice(chiffres),
+        secrets.choice(speciaux),
+    ]
+    base += [secrets.choice(alphabet) for _ in range(longueur - len(base))]
+    secrets.SystemRandom().shuffle(base)
+    return "".join(base)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
