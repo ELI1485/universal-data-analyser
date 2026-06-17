@@ -1,5 +1,7 @@
 """Streamlit analytics page for running and viewing analyses."""
 
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -48,6 +50,26 @@ def render(user_id: int, role: str) -> None:
     dataset_options = {f"{ds.nom} (ID: {ds.id})": ds.id for ds in datasets}
     selected_label = st.selectbox("Selectionnez un dataset", list(dataset_options.keys()))
     selected_id = dataset_options[selected_label]
+
+    # Apercu des donnees : permet de verifier le contenu avant de lancer
+    # une analyse complete (evite de perdre du temps sur des donnees erronees).
+    with st.expander("Apercu des donnees (10 premieres lignes)", expanded=False):
+        from app.Repositories.dataset_repository import DatasetRepository
+
+        _ds_repo = DatasetRepository()
+        dataset = _ds_repo.find_by_id(selected_id)
+        if dataset and os.path.exists(dataset.chemin_fichier):
+            try:
+                if str(dataset.chemin_fichier).lower().endswith((".xlsx", ".xls")):
+                    preview_df = pd.read_excel(dataset.chemin_fichier, nrows=10)
+                else:
+                    preview_df = pd.read_csv(dataset.chemin_fichier, nrows=10)
+                st.dataframe(preview_df, use_container_width=True)
+                st.caption(f"Affichage de 10 lignes sur {dataset.nb_lignes}")
+            except Exception as e:
+                st.warning(f"Impossible de lire l'apercu: {e}")
+        else:
+            st.warning("Fichier introuvable. Veuillez re-importer le dataset.")
 
     if st.button(
         "Lancer l'analyse complete",

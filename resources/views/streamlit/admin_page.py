@@ -3,6 +3,7 @@
 import streamlit as st
 
 from app.Http.Controllers.admin_controller import AdminController
+from app.Services.auth_service import generer_mot_de_passe_temporaire
 
 _admin_ctrl = AdminController()
 
@@ -107,8 +108,15 @@ def _render_users_tab() -> None:
                             icon=":material/key:",
                         ):
                             try:
-                                _admin_ctrl.reinitialiser_mdp(user.id, "NewPass123!")
-                                st.success("Mot de passe reinitialise: NewPass123!")
+                                # Mot de passe temporaire aleatoire et sur (jamais code en dur).
+                                temp_pass = generer_mot_de_passe_temporaire()
+                                _admin_ctrl.reinitialiser_mdp(user.id, temp_pass)
+                                st.success(
+                                    f"Nouveau mot de passe temporaire: {temp_pass}"
+                                )
+                                st.caption(
+                                    "Communiquez-le a l'utilisateur de maniere securisee."
+                                )
                             except Exception as e:
                                 st.error(str(e))
                     with c3:

@@ -420,3 +420,57 @@ def heatmap_mpl(df: pd.DataFrame) -> plt.Figure:
     fig.colorbar(im, ax=ax, shrink=0.8)
     plt.tight_layout()
     return fig
+
+
+def boxplot_mpl(df: pd.DataFrame, colonne: str) -> plt.Figure:
+    """Create a Matplotlib boxplot for a numeric column.
+
+    Args:
+        df: The DataFrame containing the data.
+        colonne: The numeric column name to plot.
+
+    Returns:
+        A Matplotlib Figure object.
+    """
+    fig, ax = plt.subplots(figsize=(8, 4))
+    data = df[colonne].dropna()
+    ax.boxplot(
+        data,
+        vert=False,
+        patch_artist=True,
+        boxprops=dict(facecolor="#93DC5C", color="#2F6B17"),
+        medianprops=dict(color="#1a237e", linewidth=2),
+        flierprops=dict(marker="o", markerfacecolor="#e53935", markersize=5, alpha=0.6),
+    )
+    ax.set_title(f"Boîte à moustaches — {colonne}", fontsize=12)
+    ax.set_xlabel(colonne)
+    ax.set_yticks([])
+    plt.tight_layout()
+    return fig
+
+
+def bar_categorical_mpl(df: pd.DataFrame, colonne: str, top_n: int = 10) -> plt.Figure:
+    """Create a Matplotlib bar chart of the top categories of a column.
+
+    Args:
+        df: The DataFrame containing the data.
+        colonne: The categorical column name to plot.
+        top_n: Maximum number of categories to display.
+
+    Returns:
+        A Matplotlib Figure object.
+    """
+    fig, ax = plt.subplots(figsize=(8, 4))
+    counts = df[colonne].astype(str).value_counts().head(top_n)
+    ax.bar(
+        [str(i)[:18] for i in counts.index],
+        counts.values,
+        color="#1a237e",
+        alpha=0.85,
+        edgecolor="white",
+    )
+    ax.set_title(f"Fréquence — {colonne}", fontsize=12)
+    ax.set_ylabel("Effectif")
+    ax.tick_params(axis="x", rotation=45, labelsize=8)
+    plt.tight_layout()
+    return fig
