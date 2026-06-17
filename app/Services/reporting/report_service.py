@@ -25,7 +25,13 @@ _dataset_repo = DatasetRepository()
 _report_repo = ReportRepository()
 
 
-def generer_rapport(dataset_id: int, user_id: int, format: str) -> Report:
+def generer_rapport(
+    dataset_id: int,
+    user_id: int,
+    format: str,
+    selected_charts: list[str] | None = None,
+    max_charts: int | None = None,
+) -> Report:
     """Generate a complete report for a dataset.
 
     Steps:
@@ -40,6 +46,9 @@ def generer_rapport(dataset_id: int, user_id: int, format: str) -> Report:
         dataset_id: The dataset ID to report on.
         user_id: The user requesting the report.
         format: Report format ('pdf' or 'excel').
+        selected_charts: Chart labels chosen by the user. When None, all
+            available charts are included (backward-compatible default).
+        max_charts: Maximum number of diagrams to include. When None, no limit.
 
     Returns:
         The saved Report ORM object.
@@ -73,9 +82,15 @@ def generer_rapport(dataset_id: int, user_id: int, format: str) -> Report:
 
         # Step 4: Generate report file
         if format == "pdf":
-            file_path = generer_pdf(dataset_id, user_id, analytics, anomalies, insights)
+            file_path = generer_pdf(
+                dataset_id, user_id, analytics, anomalies, insights,
+                selected_charts, max_charts,
+            )
         else:
-            file_path = generer_excel(dataset_id, user_id, analytics, anomalies, insights)
+            file_path = generer_excel(
+                dataset_id, user_id, analytics, anomalies, insights,
+                selected_charts, max_charts,
+            )
 
         # Step 5: Save report to database
         file_size_ko = os.path.getsize(file_path) / 1024

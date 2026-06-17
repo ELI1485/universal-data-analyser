@@ -17,13 +17,23 @@ _report_repo = ReportRepository()
 class ReportController:
     """Controller for report generation and retrieval operations."""
 
-    def generer(self, dataset_id: int, user_id: int, format: str) -> Report:
+    def generer(
+        self,
+        dataset_id: int,
+        user_id: int,
+        format: str,
+        selected_charts: list[str] | None = None,
+        max_charts: int | None = None,
+    ) -> Report:
         """Generate a report for a dataset.
 
         Args:
             dataset_id: The dataset to report on.
             user_id: The requesting user's ID.
             format: Report format ('pdf' or 'excel').
+            selected_charts: Chart labels chosen by the user. When None, all
+                available charts are included (backward-compatible default).
+            max_charts: Maximum number of diagrams to include. When None, no limit.
 
         Returns:
             The saved Report object.
@@ -38,7 +48,9 @@ class ReportController:
                 dataset_id,
                 user_id,
             )
-            report = generer_rapport(dataset_id, user_id, format)
+            report = generer_rapport(
+                dataset_id, user_id, format, selected_charts, max_charts
+            )
             return report
         except Exception as e:
             logger.error("Erreur génération rapport: %s", e)

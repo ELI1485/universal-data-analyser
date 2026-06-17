@@ -33,9 +33,11 @@ from PySide6.QtGui import QAction
 from config.logging_config import setup_logging
 from config.settings import LOG_DIR, LOG_LEVEL
 from resources.views.pyside.login_dialog import LoginDialog
+from resources.views.pyside.register_dialog import RegisterDialog
 from resources.views.pyside.upload_widget import UploadWidget
 from resources.views.pyside.analytics_widget import AnalyticsWidget
 from resources.views.pyside.report_widget import ReportWidget
+from resources.views.pyside.comparison_widget import ComparisonWidget
 from resources.views.pyside.admin_widget import AdminWidget
 from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
 
@@ -149,8 +151,12 @@ class MainWindow(QMainWindow):
         self._nav_reports.clicked.connect(lambda: self._switch_page(3))
         sidebar_layout.addWidget(self._nav_reports)
 
+        self._nav_comparison = QPushButton("🔀  Comparer")
+        self._nav_comparison.clicked.connect(lambda: self._switch_page(4))
+        sidebar_layout.addWidget(self._nav_comparison)
+
         self._nav_admin = QPushButton("⚙️  Administration")
-        self._nav_admin.clicked.connect(lambda: self._switch_page(4))
+        self._nav_admin.clicked.connect(lambda: self._switch_page(5))
         self._nav_admin.setVisible(False)
         sidebar_layout.addWidget(self._nav_admin)
 
@@ -209,12 +215,44 @@ class MainWindow(QMainWindow):
 
     def _show_login(self) -> None:
         """Show the login dialog."""
+        self._register_pending = False
         dialog = LoginDialog(self)
         dialog.login_success.connect(self._on_login_success)
+        dialog.register_requested.connect(self._mark_register_pending)
         result = dialog.exec()
+
+        # The user asked to create an account from the login screen.
+        if self._register_pending:
+            self._show_register()
+            return
 
         if result != LoginDialog.DialogCode.Accepted:
             sys.exit(0)
+
+    def _mark_register_pending(self) -> None:
+        """Flag that the user requested the registration screen."""
+        self._register_pending = True
+
+    def _show_register(self) -> None:
+        """Show the registration dialog, then return to login."""
+        dialog = RegisterDialog(self)
+        dialog.register_success.connect(self._on_register_success)
+        dialog.exec()
+        # Whatever the outcome (success, cancel, or "back to login"),
+        # bring the user back to the login screen.
+        self._show_login()
+
+    def _on_register_success(self, result: dict) -> None:
+        """Handle a successful registration.
+
+        Args:
+            result: The created user's info dict (user_id, nom, email, role).
+        """
+        QMessageBox.information(
+            self,
+            "Inscription réussie",
+            "Compte créé avec succès. Vous pouvez maintenant vous connecter.",
+        )
 
     def _on_login_success(self, result: dict) -> None:
         """Handle successful login.
@@ -263,7 +301,11 @@ class MainWindow(QMainWindow):
         report_widget = ReportWidget(self._user_id, self._role)
         self._stack.addWidget(report_widget)
 
-        # Page 4: Admin
+        # Page 4: Comparison
+        comparison_widget = ComparisonWidget(self._user_id, self._role)
+        self._stack.addWidget(comparison_widget)
+
+        # Page 5: Admin
         if self._role == "admin":
             admin_widget = AdminWidget(self._user_id, self._role)
             self._stack.addWidget(admin_widget)
@@ -500,6 +542,7 @@ class MainWindow(QMainWindow):
             ("📁", "Importer", "CSV, Excel, XLS", 1),
             ("📊", "Analyser", "Stats, anomalies, IA", 2),
             ("📄", "Rapports", "PDF et Excel", 3),
+            ("🔀", "Comparer", "Versions de datasets", 4),
         ]
 
         for icon, title, desc, page_idx in actions:

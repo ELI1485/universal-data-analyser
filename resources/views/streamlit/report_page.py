@@ -44,6 +44,29 @@ def render(user_id: int, role: str) -> None:
     format_choice = st.radio("Format du rapport", ["PDF", "Excel"], horizontal=True)
     format_value = "pdf" if format_choice == "PDF" else "excel"
 
+    # ── Diagram selection ─────────────────────────────────────────
+    chart_options = [
+        "Histogramme de distribution",
+        "Anomalies par algorithme",
+        "Matrice de corrélation",
+        "Boîte à moustaches (Boxplot)",
+        "Distribution catégorielle",
+    ]
+    selected_charts = st.multiselect(
+        "Diagrammes à inclure dans le rapport",
+        options=chart_options,
+        default=chart_options,
+        help="Choisissez les diagrammes à générer dans le rapport.",
+    )
+    max_charts = st.number_input(
+        "Nombre maximum de diagrammes",
+        min_value=1,
+        max_value=10,
+        value=min(5, len(chart_options)),
+        step=1,
+        help="Limite le nombre de diagrammes exportés.",
+    )
+
     if st.button(
         "Generer le rapport",
         use_container_width=True,
@@ -51,7 +74,13 @@ def render(user_id: int, role: str) -> None:
     ):
         try:
             with st.spinner("Generation du rapport en cours (analyse + mise en page)..."):
-                report = _report_ctrl.generer(selected_id, user_id, format_value)
+                report = _report_ctrl.generer(
+                    selected_id,
+                    user_id,
+                    format_value,
+                    selected_charts=selected_charts,
+                    max_charts=int(max_charts),
+                )
 
             st.success(
                 f"Rapport {format_choice} genere avec succes. "

@@ -8,13 +8,17 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import os
+
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 from config.settings import EXPORT_DIR
 from app.Repositories.dataset_repository import DatasetRepository
+from app.Services.reporting.chart_factory import generate_charts as _factory_generate_charts
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,8 @@ def generer(
     analytics: dict,
     anomalies: dict,
     insights: str,
+    selected_charts: list[str] | None = None,
+    max_charts: int | None = None,
 ) -> str:
     """Generate an Excel report for a dataset analysis.
 
@@ -35,6 +41,7 @@ def generer(
     - Sheet 2: Statistiques descriptives
     - Sheet 3: Anomalies détectées
     - Sheet 4: Résumé IA (insights text)
+    - Sheet 5: Visualisations (selected diagrams, if any)
 
     Args:
         dataset_id: The dataset ID.
@@ -42,6 +49,9 @@ def generer(
         analytics: Analytics results dictionary.
         anomalies: Anomalies detection results dictionary.
         insights: LLM-generated insights text.
+        selected_charts: Chart labels chosen by the user. When None, all
+            available charts are included (backward-compatible default).
+        max_charts: Maximum number of charts to embed. When None, no limit.
 
     Returns:
         The file path to the generated Excel file.
@@ -209,6 +219,36 @@ def generer(
     else:
         ws_insights.cell(row=4, column=1, value="Aucun insight IA disponible.")
 
+    # --- Sheet 5: Visualisations ---
+    # Mirror the PDF chart-selection logic: build the user-selected diagrams
+    # (respecting the max-diagram count) and embed them as images.
+    chart_images = _factory_generate_charts(
+        analytics, anomalies, selected_charts, max_charts
+    )
+    if chart_images:
+        ws_charts = wb.create_sheet("Visualisations")
+        ws_charts.cell(row=1, column=1, value="Visualisations").font = Font(
+            size=14, bold=True
+        )
+        ws_charts.column_dimensions["A"].width = 90
+
+        anchor_row = 3
+        for title, chart_path in chart_images:
+            try:
+                title_cell = ws_charts.cell(row=anchor_row, column=1, value=title)
+                title_cell.font = Font(size=12, bold=True, color="1A237E")
+                img = XLImage(chart_path)
+                # Scale large charts down so they fit nicely in the sheet.
+                if img.width > 640:
+                    ratio = 640 / float(img.width)
+                    img.width = 640
+                    img.height = int(img.height * ratio)
+                ws_charts.add_image(img, f"A{anchor_row + 1}")
+                # Leave enough rows below the image before the next chart.
+                anchor_row += int(img.height / 18) + 4
+            except Exception as e:
+                logger.warning("Erreur insertion graphique '%s' dans Excel: %s", title, e)
+
     # Save workbook
     try:
         wb.save(str(output_path))
@@ -216,5 +256,12 @@ def generer(
     except Exception as e:
         logger.error("Erreur lors de la sauvegarde du rapport Excel: %s", e)
         raise
+    finally:
+        # Clean up the temporary chart image files.
+        for _, chart_path in chart_images:
+            try:
+                os.remove(chart_path)
+            except OSError:
+                pass
 
     return str(output_path)
