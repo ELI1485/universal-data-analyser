@@ -18,6 +18,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 from config.settings import EXPORT_DIR
 from app.Repositories.dataset_repository import DatasetRepository
+from app.Services.etl.etl_service import verifier_fichier_dataset
 from app.Services.reporting.chart_factory import generate_charts as _factory_generate_charts
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,8 @@ def generer(
     ws_data.title = "Données nettoyées"
 
     if dataset and dataset.chemin_fichier:
+        # Fail fast with a clear message if the cleaned file vanished.
+        verifier_fichier_dataset(dataset)
         try:
             df = pd.read_csv(dataset.chemin_fichier, encoding="utf-8")
             # Limit to first 10000 rows for Excel performance

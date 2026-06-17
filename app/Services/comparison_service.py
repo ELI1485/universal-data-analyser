@@ -12,6 +12,7 @@ import pandas as pd
 
 from app.Repositories.dataset_repository import DatasetRepository
 from app.Repositories.anomaly_repository import AnomalyRepository
+from app.Services.etl.etl_service import verifier_fichier_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,10 @@ def comparer_datasets(id_ancien: int, id_nouveau: int) -> dict[str, Any]:
         "Comparaison datasets: '%s' (ID=%d) vs '%s' (ID=%d)",
         ds_ancien.nom, id_ancien, ds_nouveau.nom, id_nouveau,
     )
+
+    # Verify both cleaned files still exist for clear, user-friendly errors
+    verifier_fichier_dataset(ds_ancien)
+    verifier_fichier_dataset(ds_nouveau)
 
     # Read both files
     try:

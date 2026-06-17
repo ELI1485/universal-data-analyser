@@ -6,6 +6,8 @@ validation, cleaning, and persistence to the database.
 
 import logging
 import os
+import re
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +31,30 @@ class ValidationError(Exception):
     def __init__(self, errors: list[str]) -> None:
         self.errors = errors
         super().__init__(f"Validation échouée: {'; '.join(errors)}")
+
+
+def verifier_fichier_dataset(dataset) -> None:
+    """Raise a user-friendly ``FileNotFoundError`` if the dataset file is missing.
+
+    The cleaned dataset file can disappear (containers rebuilt, temp folders
+    purged, exports volume not mounted, etc.). Calling this before reading the
+    file lets every service surface a clear, actionable message in French
+    instead of a raw Python traceback.
+
+    Args:
+        dataset: A Dataset ORM object exposing ``chemin_fichier`` and ``nom``.
+
+    Raises:
+        FileNotFoundError: If the cleaned file referenced by the dataset is
+            not present on disk.
+    """
+    chemin = getattr(dataset, "chemin_fichier", None)
+    nom = getattr(dataset, "nom", "inconnu")
+    if not chemin or not os.path.exists(chemin):
+        raise FileNotFoundError(
+            f"Le fichier nettoyé '{chemin}' est introuvable. "
+            f"Veuillez ré-importer le dataset '{nom}'."
+        )
 
 
 def executer_pipeline(fichier_path: str, user_id: int, nom: str = "") -> Dataset:
@@ -77,10 +103,15 @@ def executer_pipeline(fichier_path: str, user_id: int, nom: str = "") -> Dataset
         logger.info("Étape 3/4: Nettoyage des données...")
         df_clean, quality_report = nettoyer(df)
 
-        # Save cleaned file
+        # Save cleaned file.
+        # Use the dataset display name (not the upload's temp stem, which is a
+        # random name like 'tmptsb0dkzb' for Streamlit uploads) plus a timestamp
+        # so the file is stable and collision-free across re-imports.
         clean_dir = Path(EXPORT_DIR) / "datasets"
         clean_dir.mkdir(parents=True, exist_ok=True)
-        clean_filename = f"clean_{file_path.stem}.csv"
+        safe_name = re.sub(r"[^\w\-.]", "_", dataset_name) or "dataset"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        clean_filename = f"clean_{safe_name}_{timestamp}.csv"
         clean_path = clean_dir / clean_filename
         df_clean.to_csv(str(clean_path), index=False, encoding="utf-8")
 
@@ -92,7 +123,7 @@ def executer_pipeline(fichier_path: str, user_id: int, nom: str = "") -> Dataset
         dataset = Dataset(
             user_id=user_id,
             nom=dataset_name,
-            chemin_fichier=str(clean_path),
+            chemin_fichier=str(clean_path.resolve()),
             format=extension,
             nb_lignes=len(df_clean),
             nb_colonnes=len(df_clean.columns),

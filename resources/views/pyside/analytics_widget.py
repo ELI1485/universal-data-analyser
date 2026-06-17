@@ -129,6 +129,17 @@ class AnalyticsWidget(QWidget):
         stats_layout = QVBoxLayout(stats_widget)
         stats_layout.setContentsMargins(10, 10, 10, 10)
 
+        # Multi-sheet (Excel) breakdown banner — hidden until populated.
+        self._sheet_label = QLabel("")
+        self._sheet_label.setWordWrap(True)
+        self._sheet_label.setStyleSheet(
+            "QLabel { background-color: #EAF6E1; color: #2F6B17; "
+            "border: 1px solid #93DC5C; border-radius: 6px; padding: 8px 12px; "
+            "font-weight: 500; }"
+        )
+        self._sheet_label.setVisible(False)
+        stats_layout.addWidget(self._sheet_label)
+
         # KPI cards placeholder
         self._kpi_layout = QHBoxLayout()
         self._kpi_layout.setSpacing(10)
@@ -249,6 +260,20 @@ class AnalyticsWidget(QWidget):
 
     def _display_statistics(self, analytics: dict) -> None:
         """Populate the statistics tables and KPI cards."""
+        # Multi-sheet breakdown banner
+        sheet_breakdown = analytics.get("sheet_breakdown") or {}
+        if len(sheet_breakdown) > 1:
+            details = ", ".join(
+                f"{nom} ({infos.get('nb_lignes', 0)} lignes)"
+                for nom, infos in sheet_breakdown.items()
+            )
+            self._sheet_label.setText(
+                f"Ce fichier contient {len(sheet_breakdown)} feuilles : {details}"
+            )
+            self._sheet_label.setVisible(True)
+        else:
+            self._sheet_label.setVisible(False)
+
         # KPI cards
         self._clear_layout(self._kpi_layout)
         kpis = analytics.get("kpis", {})
