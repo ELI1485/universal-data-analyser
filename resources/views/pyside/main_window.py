@@ -23,6 +23,9 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QMessageBox,
     QMenuBar,
+    QScrollArea,
+    QFrame,
+    QGridLayout,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
@@ -34,6 +37,7 @@ from resources.views.pyside.upload_widget import UploadWidget
 from resources.views.pyside.analytics_widget import AnalyticsWidget
 from resources.views.pyside.report_widget import ReportWidget
 from resources.views.pyside.admin_widget import AdminWidget
+from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
 
 
 class MainWindow(QMainWindow):
@@ -73,50 +77,86 @@ class MainWindow(QMainWindow):
 
         # Left sidebar
         self._sidebar = QWidget()
-        self._sidebar.setFixedWidth(200)
-        self._sidebar.setStyleSheet(
-            "QWidget { background-color: #1a237e; } "
-            "QPushButton { color: white; text-align: left; padding: 12px; "
-            "border: none; font-size: 13px; } "
-            "QPushButton:hover { background-color: #283593; } "
-            "QLabel { color: white; padding: 8px; }"
-        )
+        self._sidebar.setFixedWidth(240)
+        self._sidebar.setStyleSheet("""
+            QWidget { background-color: #80C64A; }
+            QPushButton { 
+                background-color: transparent; 
+                color: #ffffff; 
+                text-align: left; 
+                padding: 12px 15px; 
+                border: none; 
+                font-size: 14px; 
+                border-radius: 8px; 
+                margin: 2px 10px; 
+                font-weight: normal; 
+            }
+            QPushButton:hover { 
+                background-color: rgba(255, 255, 255, 0.2); 
+                color: #ffffff; 
+                font-weight: bold; 
+            }
+            QLabel { color: #ffffff; padding: 8px; background-color: transparent; }
+        """)
         sidebar_layout = QVBoxLayout(self._sidebar)
         sidebar_layout.setContentsMargins(0, 10, 0, 10)
 
+        # Logo area
+        logo_frame = QFrame()
+        logo_frame.setFixedHeight(110)
+        logo_frame.setStyleSheet("background-color: transparent; border: none;")
+        logo_layout = QVBoxLayout(logo_frame)
+        logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        logo_icon = QLabel("📊")
+        logo_icon.setStyleSheet("font-size: 40px; background: transparent; border: none;")
+        logo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_layout.addWidget(logo_icon)
+
+        logo_text = QLabel("UDA")
+        logo_text.setStyleSheet("font-size: 18px; font-weight: bold; color: white; background: transparent; border: none;")
+        logo_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_layout.addWidget(logo_text)
+
+        sidebar_layout.addWidget(logo_frame)
+
+        # User info
         self._user_label = QLabel("")
-        self._user_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        self._user_label.setStyleSheet("font-weight: bold; font-size: 14px; color: white; background: transparent;")
+        self._user_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sidebar_layout.addWidget(self._user_label)
 
         self._role_label = QLabel("")
+        self._role_label.setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.8); background: transparent;")
+        self._role_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sidebar_layout.addWidget(self._role_label)
 
         sidebar_layout.addSpacing(20)
 
-        self._nav_dashboard = QPushButton("🏠 Tableau de bord")
+        self._nav_dashboard = QPushButton("🏠  Tableau de bord")
         self._nav_dashboard.clicked.connect(lambda: self._switch_page(0))
         sidebar_layout.addWidget(self._nav_dashboard)
 
-        self._nav_upload = QPushButton("📁 Import")
+        self._nav_upload = QPushButton("📁  Importer des donnees")
         self._nav_upload.clicked.connect(lambda: self._switch_page(1))
         sidebar_layout.addWidget(self._nav_upload)
 
-        self._nav_analytics = QPushButton("📈 Analyses")
+        self._nav_analytics = QPushButton("📈  Analyses")
         self._nav_analytics.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self._nav_analytics)
 
-        self._nav_reports = QPushButton("📄 Rapports")
+        self._nav_reports = QPushButton("📄  Rapports")
         self._nav_reports.clicked.connect(lambda: self._switch_page(3))
         sidebar_layout.addWidget(self._nav_reports)
 
-        self._nav_admin = QPushButton("⚙️ Administration")
+        self._nav_admin = QPushButton("⚙️  Administration")
         self._nav_admin.clicked.connect(lambda: self._switch_page(4))
         self._nav_admin.setVisible(False)
         sidebar_layout.addWidget(self._nav_admin)
 
         sidebar_layout.addStretch()
 
-        self._logout_btn = QPushButton("🚪 Déconnexion")
+        self._logout_btn = QPushButton("🚪  Deconnexion")
         self._logout_btn.clicked.connect(self._on_logout)
         sidebar_layout.addWidget(self._logout_btn)
 
@@ -124,10 +164,12 @@ class MainWindow(QMainWindow):
 
         # Stacked widget for pages
         self._stack = QStackedWidget()
+        self._stack.setStyleSheet("QStackedWidget { background-color: #f8f9fc; }")
         main_layout.addWidget(self._stack)
 
         # Status bar
         self._status_bar = QStatusBar()
+        self._status_bar.setStyleSheet("QStatusBar { background-color: #ffffff; color: #31333f; border-top: 1px solid #e0e0e0; }")
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Non connecté")
 
@@ -185,8 +227,8 @@ class MainWindow(QMainWindow):
         self._role = result["role"]
         self._nom = result["nom"]
 
-        self._user_label.setText(f"  {self._nom}")
-        self._role_label.setText(f"  Rôle: {self._role}")
+        self._user_label.setText(self._nom)
+        self._role_label.setText(self._role.capitalize())
         self._status_bar.showMessage(
             f"Connecté: {self._nom} ({self._role})"
         )
@@ -206,11 +248,7 @@ class MainWindow(QMainWindow):
             widget.deleteLater()
 
         # Page 0: Dashboard
-        dashboard = QWidget()
-        dash_layout = QVBoxLayout(dashboard)
-        dash_layout.addWidget(QLabel(f"🏠 Bienvenue, {self._nom}!"))
-        dash_layout.addWidget(QLabel("Utilisez le menu de gauche pour naviguer."))
-        dash_layout.addStretch()
+        dashboard = self._create_dashboard_page()
         self._stack.addWidget(dashboard)
 
         # Page 1: Upload
@@ -229,6 +267,288 @@ class MainWindow(QMainWindow):
         if self._role == "admin":
             admin_widget = AdminWidget(self._user_id, self._role)
             self._stack.addWidget(admin_widget)
+
+    def _create_dashboard_page(self) -> QWidget:
+        """Create the dashboard page matching the Streamlit dashboard."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fc; }")
+
+        page = QWidget()
+        page.setStyleSheet("background-color: #f8f9fc;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(15)
+
+        # Title
+        layout.addWidget(SectionTitle("Tableau de bord", "🏠"))
+
+        welcome = QLabel(f"Bienvenue, <b>{self._nom}</b>! Voici un resume de votre activite.")
+        welcome.setStyleSheet("font-size: 14px; color: #555; background: transparent; border: none;")
+        layout.addWidget(welcome)
+
+        layout.addWidget(Separator())
+
+        # Metric cards row
+        try:
+            from app.Http.Controllers.upload_controller import UploadController
+            from app.Http.Controllers.report_controller import ReportController
+            from app.Repositories.anomaly_repository import AnomalyRepository
+
+            upload_ctrl = UploadController()
+            report_ctrl = ReportController()
+            anom_repo = AnomalyRepository()
+
+            datasets = upload_ctrl.lister_datasets(self._user_id, self._role)
+            reports = report_ctrl.lister_rapports(self._user_id, self._role)
+            total_anomalies = anom_repo.count_recent(days=30)
+            analyses_count = sum(1 for d in datasets if d.statut == "traite")
+
+            cards_layout = QHBoxLayout()
+            cards_layout.setSpacing(15)
+            cards_layout.addWidget(MetricCard("Datasets importes", str(len(datasets)), "📊"))
+            cards_layout.addWidget(MetricCard("Analyses effectuees", str(analyses_count), "📈"))
+            cards_layout.addWidget(MetricCard("Rapports generes", str(len(reports)), "📄"))
+            cards_layout.addWidget(MetricCard("Anomalies (30j)", str(total_anomalies), "⚠️"))
+            layout.addLayout(cards_layout)
+        except Exception:
+            err = QLabel("Erreur lors du chargement des metriques.")
+            err.setStyleSheet("color: #f59e0b; background: transparent; border: none;")
+            layout.addWidget(err)
+            datasets = []
+            reports = []
+
+        layout.addWidget(Separator())
+
+        # Data Quality Section
+        if datasets:
+            layout.addWidget(SubSectionTitle("Qualite des donnees", "📊"))
+            self._add_quality_gauges(layout, datasets)
+            layout.addWidget(Separator())
+
+        # System Stats (Admin only)
+        if self._role == "admin":
+            layout.addWidget(SubSectionTitle("Statistiques systeme", "🏢"))
+            try:
+                from app.Http.Controllers.admin_controller import AdminController
+                admin_ctrl = AdminController()
+                sys_stats = admin_ctrl.get_statistiques_systeme()
+
+                admin_cards = QHBoxLayout()
+                admin_cards.setSpacing(15)
+                admin_cards.addWidget(MetricCard("Utilisateurs actifs", str(sys_stats["active_users"]), "👥"))
+                admin_cards.addWidget(MetricCard("Volume total", f"{sys_stats['total_data_mo']:.1f} Mo", "💾"))
+                admin_cards.addWidget(MetricCard("Total datasets", str(sys_stats["total_datasets"]), "🗄️"))
+                admin_cards.addWidget(MetricCard("Total rapports", str(sys_stats["total_reports"]), "📋"))
+                layout.addLayout(admin_cards)
+            except Exception:
+                pass
+            layout.addWidget(Separator())
+
+        # Activity Timeline
+        layout.addWidget(SubSectionTitle("Activite recente", "🕐"))
+        self._add_activity_timeline(layout)
+        layout.addWidget(Separator())
+
+        # Quick Actions
+        layout.addWidget(SubSectionTitle("Actions rapides", "⚡"))
+        self._add_quick_actions(layout)
+
+        layout.addStretch()
+        scroll.setWidget(page)
+        return scroll
+
+    def _add_quality_gauges(self, layout: QVBoxLayout, datasets) -> None:
+        """Add data quality gauge charts using matplotlib."""
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+            import numpy as np
+
+            recent = sorted(datasets, key=lambda d: d.cree_le or "", reverse=True)[:3]
+
+            gauges_layout = QHBoxLayout()
+            gauges_layout.setSpacing(15)
+
+            for ds in recent:
+                quality = 95 if ds.statut == "traite" else 70 if ds.statut == "en_traitement" else 50
+
+                fig, ax = plt.subplots(figsize=(2.5, 2), subplot_kw={"projection": "polar"})
+                fig.patch.set_facecolor("#f8f9fc")
+
+                # Create gauge
+                theta = np.linspace(0, np.pi, 100)
+                ax.set_theta_zero_location("W")
+                ax.set_theta_direction(-1)
+
+                # Background arc
+                ax.barh(1, np.pi, height=0.3, left=0, color="#e8e8e8", alpha=0.5)
+                # Value arc
+                value_angle = np.pi * quality / 100
+                color = "#93DC5C" if quality >= 75 else "#f59e0b" if quality >= 50 else "#ef4444"
+                ax.barh(1, value_angle, height=0.3, left=0, color=color)
+
+                ax.set_ylim(0, 2)
+                ax.set_xlim(0, np.pi)
+                ax.axis("off")
+
+                # Center text
+                ax.text(np.pi / 2, 0.5, f"{quality}%", ha="center", va="center",
+                        fontsize=18, fontweight="bold", color="#31333f",
+                        transform=ax.transAxes)
+
+                ax.set_title(ds.nom[:20], fontsize=10, color="#31333f", pad=5)
+
+                canvas = FigureCanvas(fig)
+                canvas.setFixedHeight(160)
+                canvas.setStyleSheet("background-color: #f8f9fc; border: none;")
+
+                card = QFrame()
+                card.setStyleSheet("""
+                    QFrame {
+                        background-color: white;
+                        border-radius: 12px;
+                        border: 1px solid #e8e8e8;
+                    }
+                """)
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(10, 10, 10, 10)
+                card_layout.addWidget(canvas)
+
+                info = QLabel(f"{ds.nb_lignes} lignes - {ds.nb_colonnes} colonnes - {ds.taille_mo:.1f} Mo")
+                info.setStyleSheet("font-size: 11px; color: #888; background: transparent; border: none;")
+                info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                card_layout.addWidget(info)
+
+                gauges_layout.addWidget(card)
+                plt.close(fig)
+
+            layout.addLayout(gauges_layout)
+
+        except Exception:
+            layout.addWidget(QLabel("Impossible de charger les graphiques de qualite."))
+
+    def _add_activity_timeline(self, layout: QVBoxLayout) -> None:
+        """Add the activity timeline from audit logs."""
+        try:
+            from app.Repositories.audit_repository import AuditRepository
+            audit_repo = AuditRepository()
+
+            if self._role == "admin":
+                logs = audit_repo.find_recent(limit=8)
+            else:
+                logs = audit_repo.find_by_user(self._user_id)[:8]
+
+            if not logs:
+                no_activity = QLabel("Aucune activite recente.")
+                no_activity.setStyleSheet("color: #888; font-style: italic; background: transparent; border: none;")
+                layout.addWidget(no_activity)
+                return
+
+            for log in logs:
+                item_frame = QFrame()
+                item_frame.setStyleSheet("""
+                    QFrame {
+                        border-left: 3px solid #93DC5C;
+                        padding-left: 15px;
+                        margin-left: 10px;
+                        background: transparent;
+                        border-top: none; border-right: none; border-bottom: none;
+                        border-radius: 0;
+                    }
+                """)
+                item_layout = QHBoxLayout(item_frame)
+                item_layout.setContentsMargins(15, 8, 10, 8)
+
+                # Dot
+                dot = QLabel("●")
+                dot_color = "#22c55e" if log.statut == "succes" else "#ef4444"
+                dot.setStyleSheet(f"color: {dot_color}; font-size: 10px; background: transparent; border: none;")
+                dot.setFixedWidth(15)
+                item_layout.addWidget(dot)
+
+                # Text
+                text_layout = QVBoxLayout()
+                action_label = QLabel(log.action)
+                action_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #31333f; background: transparent; border: none;")
+                text_layout.addWidget(action_label)
+
+                timestamp = log.horodatage.strftime("%d/%m/%Y %H:%M") if log.horodatage else "N/A"
+                message = (log.message[:60] + "...") if log.message and len(log.message) > 60 else (log.message or "")
+                meta = QLabel(f"{log.entite} - {timestamp}{f' - {message}' if message else ''}")
+                meta.setStyleSheet("font-size: 11px; color: #94a3b8; background: transparent; border: none;")
+                text_layout.addWidget(meta)
+
+                item_layout.addLayout(text_layout)
+                item_layout.addStretch()
+
+                layout.addWidget(item_frame)
+
+        except Exception:
+            no_activity = QLabel("Activite non disponible.")
+            no_activity.setStyleSheet("color: #888; background: transparent; border: none;")
+            layout.addWidget(no_activity)
+
+    def _add_quick_actions(self, layout: QVBoxLayout) -> None:
+        """Add quick action cards matching Streamlit's design."""
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(15)
+
+        actions = [
+            ("📁", "Importer", "CSV, Excel, XLS", 1),
+            ("📊", "Analyser", "Stats, anomalies, IA", 2),
+            ("📄", "Rapports", "PDF et Excel", 3),
+        ]
+
+        for icon, title, desc, page_idx in actions:
+            card = QFrame()
+            card.setStyleSheet("""
+                QFrame {
+                    background-color: white;
+                    border-radius: 12px;
+                    border: 1px solid #e8e8e8;
+                    padding: 20px;
+                }
+                QFrame:hover {
+                    border: 1px solid #93DC5C;
+                }
+            """)
+            card_layout = QVBoxLayout(card)
+            card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_layout.setSpacing(8)
+
+            icon_lbl = QLabel(icon)
+            icon_lbl.setStyleSheet("font-size: 32px; background: transparent; border: none;")
+            icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_layout.addWidget(icon_lbl)
+
+            title_lbl = QLabel(title)
+            title_lbl.setStyleSheet("font-weight: bold; font-size: 15px; color: #31333f; background: transparent; border: none;")
+            title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_layout.addWidget(title_lbl)
+
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet("font-size: 12px; color: #94a3b8; background: transparent; border: none;")
+            desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card_layout.addWidget(desc_lbl)
+
+            btn = QPushButton(f"Ouvrir {title.lower()}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #93DC5C; color: white; border-radius: 8px;
+                    padding: 8px 20px; font-weight: bold; border: none;
+                }
+                QPushButton:hover { background-color: #7ab84d; }
+            """)
+            btn.clicked.connect(lambda checked, idx=page_idx: self._switch_page(idx))
+            card_layout.addWidget(btn)
+
+            actions_layout.addWidget(card)
+
+        layout.addLayout(actions_layout)
 
     def _switch_page(self, index: int) -> None:
         """Switch the visible page in the stacked widget.
@@ -291,6 +611,38 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Universal Data Analyzer")
     app.setStyle("Fusion")
+    
+    # Global StyleSheet to enforce Light Mode and Streamlit aesthetics
+    app.setStyleSheet("""
+        QWidget { background-color: #ffffff; color: #31333f; font-family: 'Segoe UI', Arial, sans-serif; }
+        QTableWidget, QTableView { background-color: #ffffff; alternate-background-color: #f8f9fc; color: #31333f; gridline-color: #e0e0e0; border: 1px solid #e0e0e0; }
+        QHeaderView::section { background-color: #f0f2f6; color: #31333f; font-weight: bold; border: 1px solid #e0e0e0; padding: 6px; }
+        QLineEdit, QTextEdit { background-color: #ffffff; color: #31333f; border: 1px solid #e0e0e0; border-radius: 4px; padding: 6px; }
+        QComboBox { background-color: #ffffff; color: #31333f; border: 1px solid #e0e0e0; border-radius: 4px; padding: 6px; }
+        QComboBox QAbstractItemView { background-color: #ffffff; color: #31333f; selection-background-color: #93DC5C; }
+        QComboBox::drop-down { border: none; }
+        QPushButton { background-color: #93DC5C; color: white; border-radius: 6px; padding: 8px 16px; font-weight: bold; border: none; }
+        QPushButton:hover { background-color: #7ab84d; }
+        QPushButton:disabled { background-color: #d0d0d0; color: #888888; }
+        QTabWidget::pane { border: 1px solid #e0e0e0; background: white; border-radius: 4px; }
+        QTabBar::tab { background: #f0f2f6; color: #31333f; padding: 8px 20px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }
+        QTabBar::tab:selected { background: white; font-weight: bold; border-bottom: 2px solid #93DC5C; }
+        QTabBar::tab:hover { background: #e0e4eb; }
+        QProgressBar { border: 1px solid #e0e0e0; border-radius: 6px; text-align: center; background: #f0f2f6; }
+        QProgressBar::chunk { background-color: #93DC5C; border-radius: 6px; }
+        QScrollBar:vertical { border: none; background: #f0f2f6; width: 10px; }
+        QScrollBar::handle:vertical { background: #c0c0c0; min-height: 20px; border-radius: 5px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { border: none; background: none; }
+        QGroupBox { border: 1px solid #e0e0e0; border-radius: 8px; margin-top: 10px; padding-top: 15px; background: white; }
+        QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; color: #31333f; font-weight: bold; }
+        QRadioButton { color: #31333f; background: transparent; }
+        QCheckBox { color: #31333f; background: transparent; }
+        QMenuBar { background-color: #ffffff; color: #31333f; border-bottom: 1px solid #e0e0e0; }
+        QMenuBar::item:selected { background-color: #93DC5C; color: white; border-radius: 4px; }
+        QMenu { background-color: #ffffff; color: #31333f; border: 1px solid #e0e0e0; }
+        QMenu::item:selected { background-color: #93DC5C; color: white; }
+        QMessageBox { background-color: #ffffff; }
+    """)
 
     window = MainWindow()
     window.show()

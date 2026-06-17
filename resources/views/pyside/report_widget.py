@@ -1,4 +1,4 @@
-"""PySide6 report widget for generating and managing reports."""
+"""PySide6 report widget — Streamlit-matching design."""
 
 import os
 
@@ -17,11 +17,14 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QProgressBar,
     QFileDialog,
+    QScrollArea,
+    QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
 from app.Http.Controllers.report_controller import ReportController
 from app.Http.Controllers.upload_controller import UploadController
+from resources.views.pyside.style_widgets import SectionTitle, SubSectionTitle, Separator
 
 
 class ReportWorker(QThread):
@@ -74,24 +77,38 @@ class ReportWidget(QWidget):
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fc; }")
+
+        page = QWidget()
+        page.setStyleSheet("background-color: #f8f9fc;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(12)
 
         # Title
-        title = QLabel("📄 Rapports")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
-        layout.addWidget(title)
+        layout.addWidget(SectionTitle("Rapports", "📄"))
+        layout.addWidget(Separator())
+
+        # Generate section
+        layout.addWidget(SubSectionTitle("Generer un nouveau rapport"))
 
         # Dataset selector
-        ds_layout = QHBoxLayout()
-        ds_layout.addWidget(QLabel("Dataset:"))
+        ds_label = QLabel("Dataset")
+        ds_label.setStyleSheet("font-weight: bold; background: transparent; border: none;")
+        layout.addWidget(ds_label)
+
         self._dataset_combo = QComboBox()
-        ds_layout.addWidget(self._dataset_combo, stretch=1)
-        layout.addLayout(ds_layout)
+        self._dataset_combo.setFixedHeight(40)
+        layout.addWidget(self._dataset_combo)
 
         # Format selection
+        format_label = QLabel("Format du rapport")
+        format_label.setStyleSheet("font-weight: bold; background: transparent; border: none; margin-top: 8px;")
+        layout.addWidget(format_label)
+
         format_layout = QHBoxLayout()
-        format_layout.addWidget(QLabel("Format:"))
         self._format_group = QButtonGroup(self)
         self._pdf_radio = QRadioButton("PDF")
         self._pdf_radio.setChecked(True)
@@ -104,12 +121,9 @@ class ReportWidget(QWidget):
         layout.addLayout(format_layout)
 
         # Generate button
-        self._generate_btn = QPushButton("📝 Générer le rapport")
-        self._generate_btn.setStyleSheet(
-            "QPushButton { background-color: #1a237e; color: white; "
-            "padding: 8px; border-radius: 4px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #283593; }"
-        )
+        self._generate_btn = QPushButton("Generer le rapport")
+        self._generate_btn.setFixedHeight(45)
+        self._generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._generate_btn.clicked.connect(self._on_generate)
         layout.addWidget(self._generate_btn)
 
@@ -117,20 +131,30 @@ class ReportWidget(QWidget):
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)
         self._progress.setVisible(False)
+        self._progress.setFixedHeight(8)
         layout.addWidget(self._progress)
 
         # Download button
-        self._download_btn = QPushButton("⬇️ Télécharger le dernier rapport")
+        self._download_btn = QPushButton("Telecharger le dernier rapport")
         self._download_btn.setEnabled(False)
+        self._download_btn.setStyleSheet("""
+            QPushButton { background-color: #3b82f6; color: white; border-radius: 6px; padding: 10px; font-weight: bold; }
+            QPushButton:hover { background-color: #2563eb; }
+            QPushButton:disabled { background-color: #d0d0d0; color: #888; }
+        """)
         self._download_btn.clicked.connect(self._on_download)
         layout.addWidget(self._download_btn)
 
         # Status
         self._status_label = QLabel("")
+        self._status_label.setStyleSheet("background: transparent; border: none;")
         layout.addWidget(self._status_label)
 
+        layout.addWidget(Separator())
+
         # Past reports table
-        layout.addWidget(QLabel("📋 Rapports précédents:"))
+        layout.addWidget(SubSectionTitle("Rapports precedents", "📋"))
+
         self._table = QTableWidget()
         self._table.setColumnCount(4)
         self._table.setHorizontalHeaderLabels(
@@ -139,7 +163,16 @@ class ReportWidget(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        self._table.setAlternatingRowColors(True)
+        self._table.setMinimumHeight(200)
         layout.addWidget(self._table)
+
+        layout.addStretch()
+
+        scroll.setWidget(page)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
 
     def _load_data(self) -> None:
         """Load datasets and past reports."""
@@ -161,8 +194,12 @@ class ReportWidget(QWidget):
 
             for row, report in enumerate(reports):
                 self._table.setItem(row, 0, QTableWidgetItem(f"Dataset #{report.dataset_id}"))
-                self._table.setItem(row, 1, QTableWidgetItem(report.format.upper()))
+
+                fmt_item = QTableWidgetItem(report.format.upper())
+                self._table.setItem(row, 1, fmt_item)
+
                 self._table.setItem(row, 2, QTableWidgetItem(f"{report.taille_ko:.1f}"))
+
                 date_str = report.genere_le.strftime("%d/%m/%Y %H:%M") if report.genere_le else "N/A"
                 self._table.setItem(row, 3, QTableWidgetItem(date_str))
         except Exception:
@@ -179,7 +216,8 @@ class ReportWidget(QWidget):
 
         self._generate_btn.setEnabled(False)
         self._progress.setVisible(True)
-        self._status_label.setText("Génération en cours...")
+        self._status_label.setText("Generation en cours...")
+        self._status_label.setStyleSheet("color: #31333f; background: transparent; border: none;")
 
         self._worker = ReportWorker(dataset_id, self._user_id, format_val)
         self._worker.finished.connect(self._on_generate_success)
@@ -193,17 +231,17 @@ class ReportWidget(QWidget):
         self._last_report_path = report.chemin_export
         self._download_btn.setEnabled(True)
         self._status_label.setText(
-            f"✅ Rapport généré ({report.taille_ko:.1f} Ko)"
+            f"Rapport genere ({report.taille_ko:.1f} Ko)"
         )
-        self._status_label.setStyleSheet("color: green;")
+        self._status_label.setStyleSheet("color: #22c55e; font-weight: bold; background: transparent; border: none;")
         self._load_reports()
 
     def _on_generate_error(self, error_msg: str) -> None:
         """Handle generation error."""
         self._progress.setVisible(False)
         self._generate_btn.setEnabled(True)
-        self._status_label.setText(f"❌ Erreur: {error_msg}")
-        self._status_label.setStyleSheet("color: red;")
+        self._status_label.setText(f"Erreur: {error_msg}")
+        self._status_label.setStyleSheet("color: #ef4444; font-weight: bold; background: transparent; border: none;")
 
     def _on_download(self) -> None:
         """Handle download button click — open file location."""

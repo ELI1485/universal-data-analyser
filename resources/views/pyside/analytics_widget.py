@@ -1,4 +1,4 @@
-"""PySide6 analytics widget for running and displaying analyses."""
+"""PySide6 analytics widget — Streamlit-matching design."""
 
 import matplotlib
 matplotlib.use("Agg")
@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QHeaderView,
     QProgressBar,
+    QScrollArea,
+    QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -27,6 +29,7 @@ from app.Http.Controllers.analytics_controller import AnalyticsController
 from app.Http.Controllers.upload_controller import UploadController
 from app.Services.llm_service import LLMService
 from app.Services.visualization.visualization_service import histogramme_mpl, heatmap_mpl
+from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
 
 
 class AnalysisWorker(QThread):
@@ -78,25 +81,33 @@ class AnalyticsWidget(QWidget):
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fc; }")
+
+        page = QWidget()
+        page.setStyleSheet("background-color: #f8f9fc;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(12)
 
         # Title
-        title = QLabel("📈 Analyses")
-        title.setStyleSheet("font-size: 16px; font-weight: bold;")
-        layout.addWidget(title)
+        layout.addWidget(SectionTitle("Analyses", "📈"))
+        layout.addWidget(Separator())
 
         # Dataset selector
         selector_layout = QHBoxLayout()
-        selector_layout.addWidget(QLabel("Dataset:"))
+        ds_label = QLabel("Dataset:")
+        ds_label.setStyleSheet("font-weight: bold; font-size: 14px; background: transparent; border: none;")
+        selector_layout.addWidget(ds_label)
+
         self._dataset_combo = QComboBox()
+        self._dataset_combo.setFixedHeight(40)
         selector_layout.addWidget(self._dataset_combo, stretch=1)
 
-        self._run_btn = QPushButton("🚀 Lancer l'analyse")
-        self._run_btn.setStyleSheet(
-            "QPushButton { background-color: #1a237e; color: white; "
-            "padding: 6px 16px; border-radius: 4px; font-weight: bold; }"
-        )
+        self._run_btn = QPushButton("Lancer l'analyse")
+        self._run_btn.setFixedHeight(40)
+        self._run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._run_btn.clicked.connect(self._on_run_analysis)
         selector_layout.addWidget(self._run_btn)
         layout.addLayout(selector_layout)
@@ -105,23 +116,59 @@ class AnalyticsWidget(QWidget):
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)
         self._progress.setVisible(False)
+        self._progress.setFixedHeight(8)
         layout.addWidget(self._progress)
+
+        layout.addWidget(Separator())
 
         # Results tabs
         self._tabs = QTabWidget()
 
         # Tab 1: Statistics
+        stats_widget = QWidget()
+        stats_layout = QVBoxLayout(stats_widget)
+        stats_layout.setContentsMargins(10, 10, 10, 10)
+
+        # KPI cards placeholder
+        self._kpi_layout = QHBoxLayout()
+        self._kpi_layout.setSpacing(10)
+        stats_layout.addLayout(self._kpi_layout)
+
+        stats_layout.addWidget(SubSectionTitle("Colonnes numeriques", "🔢"))
         self._stats_table = QTableWidget()
         self._stats_table.setColumnCount(8)
         self._stats_table.setHorizontalHeaderLabels(
-            ["Colonne", "Moyenne", "Médiane", "Écart-type", "Min", "Max", "Q25", "Q75"]
+            ["Colonne", "Moyenne", "Mediane", "Ecart-type", "Min", "Max", "Q25", "Q75"]
         )
         self._stats_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
-        self._tabs.addTab(self._stats_table, "📊 Statistiques")
+        self._stats_table.setAlternatingRowColors(True)
+        stats_layout.addWidget(self._stats_table)
+
+        stats_layout.addWidget(SubSectionTitle("Colonnes categorielles", "🏷️"))
+        self._cat_table = QTableWidget()
+        self._cat_table.setColumnCount(4)
+        self._cat_table.setHorizontalHeaderLabels(
+            ["Colonne", "Valeurs uniques", "Mode", "Frequence mode (%)"]
+        )
+        self._cat_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self._cat_table.setAlternatingRowColors(True)
+        stats_layout.addWidget(self._cat_table)
+
+        self._tabs.addTab(stats_widget, "Statistiques")
 
         # Tab 2: Anomalies
+        anom_widget = QWidget()
+        anom_layout = QVBoxLayout(anom_widget)
+        anom_layout.setContentsMargins(10, 10, 10, 10)
+
+        self._anom_kpi_layout = QHBoxLayout()
+        self._anom_kpi_layout.setSpacing(10)
+        anom_layout.addLayout(self._anom_kpi_layout)
+
         self._anomalies_table = QTableWidget()
         self._anomalies_table.setColumnCount(5)
         self._anomalies_table.setHorizontalHeaderLabels(
@@ -130,14 +177,30 @@ class AnalyticsWidget(QWidget):
         self._anomalies_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
-        self._tabs.addTab(self._anomalies_table, "⚠️ Anomalies")
+        self._anomalies_table.setAlternatingRowColors(True)
+        anom_layout.addWidget(self._anomalies_table)
+
+        self._tabs.addTab(anom_widget, "Anomalies")
 
         # Tab 3: Insights
+        insights_widget = QWidget()
+        insights_layout = QVBoxLayout(insights_widget)
+        insights_layout.setContentsMargins(10, 10, 10, 10)
+
         self._insights_text = QTextEdit()
         self._insights_text.setReadOnly(True)
-        self._tabs.addTab(self._insights_text, "🤖 Insights IA")
+        self._insights_text.setStyleSheet("border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; background: white;")
+        insights_layout.addWidget(self._insights_text)
+
+        self._tabs.addTab(insights_widget, "Insights IA")
 
         layout.addWidget(self._tabs)
+        layout.addStretch()
+
+        scroll.setWidget(page)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
 
     def _load_datasets(self) -> None:
         """Load available datasets into the combo box."""
@@ -185,11 +248,31 @@ class AnalyticsWidget(QWidget):
         QMessageBox.critical(self, "Erreur d'analyse", error_msg)
 
     def _display_statistics(self, analytics: dict) -> None:
-        """Populate the statistics table."""
-        stats = analytics.get("statistiques", {}).get("colonnes", {})
-        self._stats_table.setRowCount(len(stats))
+        """Populate the statistics tables and KPI cards."""
+        # KPI cards
+        self._clear_layout(self._kpi_layout)
+        kpis = analytics.get("kpis", {})
+        if kpis:
+            self._kpi_layout.addWidget(MetricCard("Total Lignes", str(kpis.get("total_rows", "N/A")), "📋"))
+            self._kpi_layout.addWidget(MetricCard("Total Colonnes", str(kpis.get("total_columns", "N/A")), "📊"))
+            self._kpi_layout.addWidget(MetricCard("Completude", f"{kpis.get('completeness_rate', 0):.1f}%", "✅"))
+            self._kpi_layout.addWidget(MetricCard("Memoire", f"{kpis.get('memory_usage_mb', 0):.2f} Mo", "💾"))
 
-        for row, (col_name, col_stats) in enumerate(stats.items()):
+        stats = analytics.get("statistiques", {}).get("colonnes", {})
+
+        # Split numeric vs categorical
+        numeric_rows = {}
+        categorical_rows = {}
+        for col_name, col_stats in stats.items():
+            kind = col_stats.get("_kind", "numeric")
+            if kind == "categorical":
+                categorical_rows[col_name] = col_stats
+            else:
+                numeric_rows[col_name] = col_stats
+
+        # Numeric table
+        self._stats_table.setRowCount(len(numeric_rows))
+        for row, (col_name, col_stats) in enumerate(numeric_rows.items()):
             self._stats_table.setItem(row, 0, QTableWidgetItem(col_name))
             self._stats_table.setItem(row, 1, QTableWidgetItem(self._fmt(col_stats.get("mean"))))
             self._stats_table.setItem(row, 2, QTableWidgetItem(self._fmt(col_stats.get("median"))))
@@ -199,8 +282,26 @@ class AnalyticsWidget(QWidget):
             self._stats_table.setItem(row, 6, QTableWidgetItem(self._fmt(col_stats.get("q25"))))
             self._stats_table.setItem(row, 7, QTableWidgetItem(self._fmt(col_stats.get("q75"))))
 
+        # Categorical table
+        self._cat_table.setRowCount(len(categorical_rows))
+        for row, (col_name, col_stats) in enumerate(categorical_rows.items()):
+            self._cat_table.setItem(row, 0, QTableWidgetItem(col_name))
+            self._cat_table.setItem(row, 1, QTableWidgetItem(str(col_stats.get("unique_count", "N/A"))))
+            self._cat_table.setItem(row, 2, QTableWidgetItem(str(col_stats.get("mode", "N/A"))))
+            self._cat_table.setItem(row, 3, QTableWidgetItem(self._fmt(col_stats.get("mode_frequency_pct"))))
+
     def _display_anomalies(self, anomalies: dict) -> None:
-        """Populate the anomalies table."""
+        """Populate the anomalies table and KPI cards."""
+        # KPI cards
+        self._clear_layout(self._anom_kpi_layout)
+        total = anomalies.get("total", 0)
+        resume = anomalies.get("resume", {})
+
+        self._anom_kpi_layout.addWidget(MetricCard("Total Anomalies", str(total), "⚠️"))
+        self._anom_kpi_layout.addWidget(MetricCard("Z-Score", str(resume.get("zscore_count", 0)), "📊"))
+        self._anom_kpi_layout.addWidget(MetricCard("IQR", str(resume.get("iqr_count", 0)), "🔍"))
+        self._anom_kpi_layout.addWidget(MetricCard("Isolation Forest", str(resume.get("isolation_count", 0)), "🌳"))
+
         all_anom = (
             anomalies.get("zscore", [])
             + anomalies.get("iqr", [])
@@ -219,7 +320,7 @@ class AnalyticsWidget(QWidget):
 
     def _display_insights(self, results: dict) -> None:
         """Generate and display AI insights."""
-        self._insights_text.setText("Génération des insights IA en cours...")
+        self._insights_text.setText("Generation des insights IA en cours...")
         try:
             llm = LLMService()
             analytics = results.get("analytics", {})
@@ -228,7 +329,15 @@ class AnalyticsWidget(QWidget):
             stats_data = analytics.get("statistiques", {}).get("colonnes", {})
             stats_summary = ""
             for col_name, col_stats in list(stats_data.items())[:5]:
-                stats_summary += f"  {col_name}: moy={col_stats.get('mean')}\n"
+                kind = col_stats.get("_kind", "numeric")
+                if kind == "categorical":
+                    stats_summary += (
+                        f"  {col_name} (categoriel): "
+                        f"{col_stats.get('unique_count')} valeurs uniques, "
+                        f"mode='{col_stats.get('mode')}'\n"
+                    )
+                else:
+                    stats_summary += f"  {col_name}: moy={col_stats.get('mean')}\n"
 
             context = {
                 "dataset_name": analytics.get("dataset_info", {}).get("nom", "Inconnu"),
@@ -243,7 +352,15 @@ class AnalyticsWidget(QWidget):
             insights = llm.generer_insights(context)
             self._insights_text.setText(insights)
         except Exception as e:
-            self._insights_text.setText(f"Erreur génération insights: {e}")
+            self._insights_text.setText(f"Erreur generation insights: {e}")
+
+    def _clear_layout(self, layout):
+        """Remove all widgets from a layout."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
 
     @staticmethod
     def _fmt(value) -> str:

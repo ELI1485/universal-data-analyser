@@ -1,6 +1,7 @@
 """PySide6 login dialog for user authentication."""
 
 import sys
+import urllib.request
 from pathlib import Path
 
 _project_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -11,19 +12,22 @@ from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QMessageBox,
+    QWidget,
+    QFrame,
+    QCheckBox,
 )
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Signal, Qt, QPoint
+from PySide6.QtGui import QFont, QPixmap, QColor
 
 from app.Http.Controllers.auth_controller import AuthController
 
 
 class LoginDialog(QDialog):
-    """Login dialog for PySide6 desktop application.
+    """Modern Login dialog for PySide6 desktop application.
 
     Emits login_success signal with token and role on successful authentication.
     """
@@ -38,65 +42,180 @@ class LoginDialog(QDialog):
         """
         super().__init__(parent)
         self._auth_ctrl = AuthController()
+        
+        # Variables for custom dragging
+        self._drag_pos = QPoint()
+        
         self._setup_ui()
 
     def _setup_ui(self) -> None:
         """Set up the dialog UI components."""
+        # Window settings
         self.setWindowTitle("Universal Data Analyzer — Connexion")
-        self.setFixedSize(400, 300)
-        self.setModal(True)
+        self.setFixedSize(960, 520)
+        self.setWindowFlags(Qt.WindowType.Dialog)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(40, 30, 40, 30)
-
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Container frame (for rounded corners and shadow simulation)
+        container = QFrame(self)
+        container.setObjectName("MainContainer")
+        container.setStyleSheet(
+            "#MainContainer {"
+            "  background-color: white;"
+            "  border-radius: 20px;"
+            "}"
+        )
+        main_layout.addWidget(container)
+        
+        # Horizontal layout inside container
+        h_layout = QHBoxLayout(container)
+        h_layout.setContentsMargins(0, 0, 0, 0)
+        h_layout.setSpacing(0)
+        
+        # --- LEFT PANEL ---
+        left_panel = QWidget()
+        left_panel.setFixedWidth(480)
+        left_layout = QGridLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 1. Background image
+        bg_label = QLabel()
+        bg_label.setScaledContents(True)
+        try:
+            url = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop"
+            # Setting a 3 second timeout so the UI doesn't hang if offline
+            data = urllib.request.urlopen(url, timeout=3).read()
+            pixmap = QPixmap()
+            pixmap.loadFromData(data)
+            bg_label.setPixmap(pixmap)
+        except Exception:
+            # Fallback to green gradient
+            bg_label.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #93DC5C, stop:1 #4e732d); border-top-left-radius: 20px; border-bottom-left-radius: 20px;")
+        
+        left_layout.addWidget(bg_label, 0, 0)
+        
+        # 2. Dark overlay (to make the image darker like in Streamlit)
+        overlay = QFrame()
+        overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.3); border-top-left-radius: 20px; border-bottom-left-radius: 20px;")
+        left_layout.addWidget(overlay, 0, 0)
+        
+        # 3. Logo box
+        logo_box = QFrame()
+        logo_box.setFixedSize(200, 180)
+        logo_box.setStyleSheet(
+            "QFrame {"
+            "  background-color: rgba(147, 220, 92, 0.95);"
+            "  border-radius: 25px;"
+            "}"
+        )
+        logo_layout = QVBoxLayout(logo_box)
+        logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        icon_label = QLabel("📊") # Fallback icon 
+        icon_label.setStyleSheet("font-size: 60px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_layout.addWidget(icon_label)
+        
+        brand_label = QLabel("UDA Portal")
+        brand_label.setStyleSheet("color: white; font-weight: bold; font-size: 20px; background: transparent;")
+        brand_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_layout.addWidget(brand_label)
+        
+        left_layout.addWidget(logo_box, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        h_layout.addWidget(left_panel)
+        
+        # --- RIGHT PANEL ---
+        right_panel = QFrame()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(50, 20, 50, 40)
+        
+        right_layout.addStretch()
+        
         # Title
-        title_label = QLabel("📊 Universal Data Analyzer")
+        title_label = QLabel("Plateforme eServices")
+        title_label.setStyleSheet("font-size: 24px; color: #2c3e50; font-weight: 300; margin-bottom: 20px;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        layout.addWidget(title_label)
-
-        subtitle_label = QLabel("Connexion")
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(subtitle_label)
-
+        right_layout.addWidget(title_label)
+        
         # Email field
-        email_label = QLabel("Email:")
-        layout.addWidget(email_label)
         self._email_input = QLineEdit()
-        self._email_input.setPlaceholderText("admin@uda.local")
-        layout.addWidget(self._email_input)
-
+        self._email_input.setPlaceholderText("Ex: admin@uda.local")
+        self._email_input.setFixedHeight(50)
+        right_layout.addWidget(self._email_input)
+        
+        right_layout.addSpacing(10)
+        
         # Password field
-        password_label = QLabel("Mot de passe:")
-        layout.addWidget(password_label)
         self._password_input = QLineEdit()
-        self._password_input.setPlaceholderText("Entrez votre mot de passe")
+        self._password_input.setPlaceholderText("••••••••••••")
         self._password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._password_input.setFixedHeight(50)
         self._password_input.returnPressed.connect(self._on_login_clicked)
-        layout.addWidget(self._password_input)
-
+        right_layout.addWidget(self._password_input)
+        
+        right_layout.addSpacing(10)
+        
+        # Remember me
+        self._remember_cb = QCheckBox("Se rappeler de moi")
+        self._remember_cb.setStyleSheet("color: #666;")
+        right_layout.addWidget(self._remember_cb)
+        
+        right_layout.addSpacing(15)
+        
         # Error label
         self._error_label = QLabel("")
-        self._error_label.setStyleSheet("color: red;")
+        self._error_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
         self._error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._error_label.setWordWrap(True)
-        layout.addWidget(self._error_label)
-
+        right_layout.addWidget(self._error_label)
+        
         # Login button
         self._login_btn = QPushButton("Se connecter")
-        self._login_btn.setStyleSheet(
-            "QPushButton { background-color: #1a237e; color: white; "
-            "padding: 8px; border-radius: 4px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #283593; }"
-        )
+        self._login_btn.setFixedHeight(50)
+        self._login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._login_btn.clicked.connect(self._on_login_clicked)
-        layout.addWidget(self._login_btn)
-
-        layout.addStretch()
+        right_layout.addWidget(self._login_btn)
+        
+        right_layout.addStretch()
+        
+        # Footer
+        footer = QLabel("Mot de passe oublié ?    |    Questions ?\n\nCopyright © 2026 - Tous droits réservés")
+        footer.setStyleSheet("color: #a0a0a0; font-size: 12px;")
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_layout.addWidget(footer)
+        
+        h_layout.addWidget(right_panel)
+        
+        # Apply global QSS for right panel inputs
+        self.setStyleSheet("""
+            QLineEdit {
+                border-radius: 25px;
+                border: 1px solid #e0e0e0;
+                background: #f8f9fc;
+                padding-left: 25px;
+                font-size: 14px;
+                color: #000000;
+            }
+            QLineEdit:focus {
+                border: 2px solid #93DC5C;
+                background: white;
+            }
+            QPushButton#login_btn {
+                border-radius: 25px;
+                background-color: #93DC5C;
+                color: white;
+                font-weight: bold;
+                font-size: 16px;
+                border: none;
+            }
+            QPushButton#login_btn:hover {
+                background-color: #7ab84d;
+            }
+        """)
+        self._login_btn.setObjectName("login_btn")
 
     def _on_login_clicked(self) -> None:
         """Handle login button click."""
