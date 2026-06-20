@@ -6,7 +6,6 @@ front-ends stay in sync.
 """
 
 import sys
-import urllib.request
 from pathlib import Path
 
 _project_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -81,19 +80,11 @@ class RegisterDialog(QDialog):
 
         bg_label = QLabel()
         bg_label.setScaledContents(True)
-        try:
-            url = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop"
-            data = urllib.request.urlopen(url, timeout=3).read()
-            from PySide6.QtGui import QPixmap
-
-            pixmap = QPixmap()
-            pixmap.loadFromData(data)
-            bg_label.setPixmap(pixmap)
-        except Exception:
-            bg_label.setStyleSheet(
-                "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #93DC5C, stop:1 #4e732d);"
-                " border-top-left-radius: 20px; border-bottom-left-radius: 20px;"
-            )
+        # Use safe local gradient — no network calls that can freeze the UI
+        bg_label.setStyleSheet(
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #93DC5C, stop:1 #4e732d);"
+            " border-top-left-radius: 20px; border-bottom-left-radius: 20px;"
+        )
         left_layout.addWidget(bg_label, 0, 0)
 
         overlay = QFrame()
@@ -114,8 +105,8 @@ class RegisterDialog(QDialog):
         logo_layout = QVBoxLayout(logo_box)
         logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        icon_label = QLabel("📊")
-        icon_label.setStyleSheet("font-size: 60px; background: transparent;")
+        icon_label = QLabel("\u25a6")
+        icon_label.setStyleSheet("font-size: 60px; background: transparent; color: white;")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo_layout.addWidget(icon_label)
 

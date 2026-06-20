@@ -11,7 +11,7 @@ _project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from PySide6.QtWidgets import (
+from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QMainWindow,
     QWidget,
@@ -22,24 +22,75 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QMessageBox,
-    QMenuBar,
     QScrollArea,
     QFrame,
-    QGridLayout,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, QThread, Signal, QTimer  # noqa: E402
+from PySide6.QtGui import QAction  # noqa: E402
 
-from config.logging_config import setup_logging
-from config.settings import LOG_DIR, LOG_LEVEL
-from resources.views.pyside.login_dialog import LoginDialog
-from resources.views.pyside.register_dialog import RegisterDialog
-from resources.views.pyside.upload_widget import UploadWidget
-from resources.views.pyside.analytics_widget import AnalyticsWidget
-from resources.views.pyside.report_widget import ReportWidget
-from resources.views.pyside.comparison_widget import ComparisonWidget
-from resources.views.pyside.admin_widget import AdminWidget
-from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator
+from config.logging_config import setup_logging  # noqa: E402
+from config.settings import LOG_DIR, LOG_LEVEL  # noqa: E402
+from resources.views.pyside.login_dialog import LoginDialog  # noqa: E402
+from resources.views.pyside.register_dialog import RegisterDialog  # noqa: E402
+from resources.views.pyside.upload_widget import UploadWidget  # noqa: E402
+from resources.views.pyside.analytics_widget import AnalyticsWidget  # noqa: E402
+from resources.views.pyside.report_widget import ReportWidget  # noqa: E402
+from resources.views.pyside.comparison_widget import ComparisonWidget  # noqa: E402
+from resources.views.pyside.admin_widget import AdminWidget  # noqa: E402
+from resources.views.pyside.style_widgets import MetricCard, SectionTitle, SubSectionTitle, Separator  # noqa: E402
+
+
+class DashboardWorker(QThread):
+    """Background worker that fetches all dashboard data off the main thread."""
+
+    finished = Signal(dict)
+    error = Signal(str)
+
+    def __init__(self, user_id: int, role: str) -> None:
+        super().__init__()
+        self._user_id = user_id
+        self._role = role
+
+    def run(self) -> None:
+        """Fetch dashboard metrics in background."""
+        try:
+            from app.Http.Controllers.upload_controller import UploadController
+            from app.Http.Controllers.report_controller import ReportController
+            from app.Repositories.anomaly_repository import AnomalyRepository
+
+            upload_ctrl = UploadController()
+            report_ctrl = ReportController()
+            anom_repo = AnomalyRepository()
+
+            datasets = upload_ctrl.lister_datasets(self._user_id, self._role)
+            reports = report_ctrl.lister_rapports(self._user_id, self._role)
+            total_anomalies = anom_repo.count_recent(days=30)
+            analyses_count = sum(1 for d in datasets if d.statut == "traite")
+
+            result: dict[str, object] = {
+                "datasets": datasets,
+                "reports": reports,
+                "total_anomalies": total_anomalies,
+                "analyses_count": analyses_count,
+            }
+
+            # Admin system stats
+            if self._role == "admin":
+                from app.Http.Controllers.admin_controller import AdminController
+                admin_ctrl = AdminController()
+                result["sys_stats"] = admin_ctrl.get_statistiques_systeme()
+
+            # Activity timeline
+            from app.Repositories.audit_repository import AuditRepository
+            audit_repo = AuditRepository()
+            if self._role == "admin":
+                result["logs"] = audit_repo.find_recent(limit=8)
+            else:
+                result["logs"] = audit_repo.find_by_user(self._user_id)[:8]
+
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class MainWindow(QMainWindow):
@@ -55,6 +106,7 @@ class MainWindow(QMainWindow):
         self._user_id = None
         self._role = None
         self._nom = None
+        self._dashboard_worker = None
 
         self.setWindowTitle("Universal Data Analyzer")
         self.setMinimumSize(1200, 800)
@@ -62,7 +114,10 @@ class MainWindow(QMainWindow):
         setup_logging(log_dir=LOG_DIR, log_level=LOG_LEVEL)
 
         self._setup_ui()
-        self._show_login()
+        
+        # Defer showing the login dialog until the event loop is running and 
+        # the main window is fully ready, preventing invisible dialogs.
+        QTimer.singleShot(100, self._show_login)
 
     def _setup_ui(self) -> None:
         """Set up the main window UI components."""
@@ -110,8 +165,8 @@ class MainWindow(QMainWindow):
         logo_layout = QVBoxLayout(logo_frame)
         logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        logo_icon = QLabel("📊")
-        logo_icon.setStyleSheet("font-size: 40px; background: transparent; border: none;")
+        logo_icon = QLabel("\u25a6")
+        logo_icon.setStyleSheet("font-size: 40px; background: transparent; border: none; color: white;")
         logo_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo_layout.addWidget(logo_icon)
 
@@ -135,34 +190,34 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addSpacing(20)
 
-        self._nav_dashboard = QPushButton("🏠  Tableau de bord")
+        self._nav_dashboard = QPushButton("\u2302  Tableau de bord")
         self._nav_dashboard.clicked.connect(lambda: self._switch_page(0))
         sidebar_layout.addWidget(self._nav_dashboard)
 
-        self._nav_upload = QPushButton("📁  Importer des donnees")
+        self._nav_upload = QPushButton("\u2630  Importer des donnees")
         self._nav_upload.clicked.connect(lambda: self._switch_page(1))
         sidebar_layout.addWidget(self._nav_upload)
 
-        self._nav_analytics = QPushButton("📈  Analyses")
+        self._nav_analytics = QPushButton("\u2197  Analyses")
         self._nav_analytics.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self._nav_analytics)
 
-        self._nav_reports = QPushButton("📄  Rapports")
+        self._nav_reports = QPushButton("\u25a1  Rapports")
         self._nav_reports.clicked.connect(lambda: self._switch_page(3))
         sidebar_layout.addWidget(self._nav_reports)
 
-        self._nav_comparison = QPushButton("🔀  Comparer")
+        self._nav_comparison = QPushButton("\u21c4  Comparer")
         self._nav_comparison.clicked.connect(lambda: self._switch_page(4))
         sidebar_layout.addWidget(self._nav_comparison)
 
-        self._nav_admin = QPushButton("⚙️  Administration")
+        self._nav_admin = QPushButton("\u2699  Administration")
         self._nav_admin.clicked.connect(lambda: self._switch_page(5))
         self._nav_admin.setVisible(False)
         sidebar_layout.addWidget(self._nav_admin)
 
         sidebar_layout.addStretch()
 
-        self._logout_btn = QPushButton("🚪  Deconnexion")
+        self._logout_btn = QPushButton("\u2190  Deconnexion")
         self._logout_btn.clicked.connect(self._on_logout)
         sidebar_layout.addWidget(self._logout_btn)
 
@@ -177,10 +232,11 @@ class MainWindow(QMainWindow):
         self._status_bar = QStatusBar()
         self._status_bar.setStyleSheet("QStatusBar { background-color: #ffffff; color: #31333f; border-top: 1px solid #e0e0e0; }")
         self.setStatusBar(self._status_bar)
-        self._status_bar.showMessage("Non connecté")
+        self._status_bar.showMessage("Non connecte")
 
         # Initially hide the main content
         self._sidebar.setVisible(False)
+        self._stack.setVisible(False)
 
     def _create_menu_bar(self) -> None:
         """Create the application menu bar."""
@@ -188,7 +244,7 @@ class MainWindow(QMainWindow):
 
         # File menu
         file_menu = menu_bar.addMenu("Fichier")
-        logout_action = QAction("Déconnexion", self)
+        logout_action = QAction("Deconnexion", self)
         logout_action.triggered.connect(self._on_logout)
         file_menu.addAction(logout_action)
         quit_action = QAction("Quitter", self)
@@ -203,13 +259,13 @@ class MainWindow(QMainWindow):
 
         # Reports menu
         reports_menu = menu_bar.addMenu("Rapports")
-        gen_action = QAction("Générer un rapport", self)
+        gen_action = QAction("Generer un rapport", self)
         gen_action.triggered.connect(lambda: self._switch_page(3))
         reports_menu.addAction(gen_action)
 
         # Help menu
         help_menu = menu_bar.addMenu("Aide")
-        about_action = QAction("À propos", self)
+        about_action = QAction("A propos", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
@@ -250,8 +306,8 @@ class MainWindow(QMainWindow):
         """
         QMessageBox.information(
             self,
-            "Inscription réussie",
-            "Compte créé avec succès. Vous pouvez maintenant vous connecter.",
+            "Inscription reussie",
+            "Compte cree avec succes. Vous pouvez maintenant vous connecter.",
         )
 
     def _on_login_success(self, result: dict) -> None:
@@ -268,24 +324,34 @@ class MainWindow(QMainWindow):
         self._user_label.setText(self._nom)
         self._role_label.setText(self._role.capitalize())
         self._status_bar.showMessage(
-            f"Connecté: {self._nom} ({self._role})"
+            f"Connecte: {self._nom} ({self._role})"
         )
 
         self._nav_admin.setVisible(self._role == "admin")
 
         self._sidebar.setVisible(True)
+        self._stack.setVisible(True)
+        self.show()
         self._setup_pages()
         self._switch_page(0)
 
-    def _setup_pages(self) -> None:
-        """Set up the stacked widget pages after login."""
-        # Clear existing pages
+    def _clear_pages(self) -> None:
+        """Remove and delete all pages from the stacked widget."""
         while self._stack.count() > 0:
             widget = self._stack.widget(0)
-            self._stack.removeWidget(widget)
-            widget.deleteLater()
+            if widget is not None:
+                self._stack.removeWidget(widget)
+                widget.deleteLater()
+            else:
+                break
 
-        # Page 0: Dashboard
+    def _setup_pages(self) -> None:
+        """Set up the stacked widget pages after login."""
+        if self._user_id is None or self._role is None:
+            return
+        self._clear_pages()
+
+        # Page 0: Dashboard (loading state — populated asynchronously)
         dashboard = self._create_dashboard_page()
         self._stack.addWidget(dashboard)
 
@@ -310,8 +376,41 @@ class MainWindow(QMainWindow):
             admin_widget = AdminWidget(self._user_id, self._role)
             self._stack.addWidget(admin_widget)
 
+        # Kick off background data fetch for dashboard
+        self._fetch_dashboard_data()
+
+    def _fetch_dashboard_data(self) -> None:
+        """Start the background worker to fetch dashboard data."""
+        if self._user_id is None or self._role is None:
+            return
+        self._dashboard_worker = DashboardWorker(self._user_id, self._role)
+        self._dashboard_worker.finished.connect(self._on_dashboard_data_ready)
+        self._dashboard_worker.error.connect(self._on_dashboard_data_error)
+        self._dashboard_worker.start()
+
+    def _on_dashboard_data_ready(self, data: dict) -> None:
+        """Populate the dashboard with data fetched in background."""
+        # Replace the loading dashboard with a fully populated one
+        old_dashboard = self._stack.widget(0)
+        new_dashboard = self._create_populated_dashboard(data)
+        self._stack.insertWidget(0, new_dashboard)
+        if old_dashboard is not None:
+            self._stack.removeWidget(old_dashboard)
+            old_dashboard.deleteLater()
+        self._stack.setCurrentIndex(0)
+
+    def _on_dashboard_data_error(self, error_msg: str) -> None:
+        """Handle dashboard data fetch error."""
+        # Find the loading label and update it
+        dashboard = self._stack.widget(0)
+        if dashboard:
+            loading = dashboard.findChild(QLabel, "dashboard_loading")
+            if loading:
+                loading.setText(f"Erreur lors du chargement: {error_msg}")
+                loading.setStyleSheet("color: #f59e0b; font-style: italic; background: transparent; border: none;")
+
     def _create_dashboard_page(self) -> QWidget:
-        """Create the dashboard page matching the Streamlit dashboard."""
+        """Create a lightweight dashboard page with a loading indicator."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fc; }")
@@ -323,7 +422,39 @@ class MainWindow(QMainWindow):
         layout.setSpacing(15)
 
         # Title
-        layout.addWidget(SectionTitle("Tableau de bord", "🏠"))
+        layout.addWidget(SectionTitle("Tableau de bord", "\u2302"))
+
+        welcome = QLabel(f"Bienvenue, <b>{self._nom}</b>! Voici un resume de votre activite.")
+        welcome.setStyleSheet("font-size: 14px; color: #555; background: transparent; border: none;")
+        layout.addWidget(welcome)
+
+        layout.addWidget(Separator())
+
+        # Loading indicator
+        loading = QLabel("Chargement des donnees...")
+        loading.setObjectName("dashboard_loading")
+        loading.setStyleSheet("font-size: 16px; color: #888; font-style: italic; background: transparent; border: none; padding: 40px;")
+        loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(loading)
+
+        layout.addStretch()
+        scroll.setWidget(page)
+        return scroll
+
+    def _create_populated_dashboard(self, data: dict) -> QWidget:
+        """Create the fully populated dashboard page from pre-fetched data."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #f8f9fc; }")
+
+        page = QWidget()
+        page.setStyleSheet("background-color: #f8f9fc;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(15)
+
+        # Title
+        layout.addWidget(SectionTitle("Tableau de bord", "\u2302"))
 
         welcome = QLabel(f"Bienvenue, <b>{self._nom}</b>! Voici un resume de votre activite.")
         welcome.setStyleSheet("font-size: 14px; color: #555; background: transparent; border: none;")
@@ -332,68 +463,48 @@ class MainWindow(QMainWindow):
         layout.addWidget(Separator())
 
         # Metric cards row
-        try:
-            from app.Http.Controllers.upload_controller import UploadController
-            from app.Http.Controllers.report_controller import ReportController
-            from app.Repositories.anomaly_repository import AnomalyRepository
+        datasets = data.get("datasets", [])
+        reports = data.get("reports", [])
+        total_anomalies = data.get("total_anomalies", 0)
+        analyses_count = data.get("analyses_count", 0)
 
-            upload_ctrl = UploadController()
-            report_ctrl = ReportController()
-            anom_repo = AnomalyRepository()
-
-            datasets = upload_ctrl.lister_datasets(self._user_id, self._role)
-            reports = report_ctrl.lister_rapports(self._user_id, self._role)
-            total_anomalies = anom_repo.count_recent(days=30)
-            analyses_count = sum(1 for d in datasets if d.statut == "traite")
-
-            cards_layout = QHBoxLayout()
-            cards_layout.setSpacing(15)
-            cards_layout.addWidget(MetricCard("Datasets importes", str(len(datasets)), "📊"))
-            cards_layout.addWidget(MetricCard("Analyses effectuees", str(analyses_count), "📈"))
-            cards_layout.addWidget(MetricCard("Rapports generes", str(len(reports)), "📄"))
-            cards_layout.addWidget(MetricCard("Anomalies (30j)", str(total_anomalies), "⚠️"))
-            layout.addLayout(cards_layout)
-        except Exception:
-            err = QLabel("Erreur lors du chargement des metriques.")
-            err.setStyleSheet("color: #f59e0b; background: transparent; border: none;")
-            layout.addWidget(err)
-            datasets = []
-            reports = []
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(15)
+        cards_layout.addWidget(MetricCard("Datasets importes", str(len(datasets)), "\u25a6"))
+        cards_layout.addWidget(MetricCard("Analyses effectuees", str(analyses_count), "\u2197"))
+        cards_layout.addWidget(MetricCard("Rapports generes", str(len(reports)), "\u25a1"))
+        cards_layout.addWidget(MetricCard("Anomalies (30j)", str(total_anomalies), "\u26a0"))
+        layout.addLayout(cards_layout)
 
         layout.addWidget(Separator())
 
         # Data Quality Section
         if datasets:
-            layout.addWidget(SubSectionTitle("Qualite des donnees", "📊"))
+            layout.addWidget(SubSectionTitle("Qualite des donnees", "\u25a6"))
             self._add_quality_gauges(layout, datasets)
             layout.addWidget(Separator())
 
         # System Stats (Admin only)
-        if self._role == "admin":
-            layout.addWidget(SubSectionTitle("Statistiques systeme", "🏢"))
-            try:
-                from app.Http.Controllers.admin_controller import AdminController
-                admin_ctrl = AdminController()
-                sys_stats = admin_ctrl.get_statistiques_systeme()
-
-                admin_cards = QHBoxLayout()
-                admin_cards.setSpacing(15)
-                admin_cards.addWidget(MetricCard("Utilisateurs actifs", str(sys_stats["active_users"]), "👥"))
-                admin_cards.addWidget(MetricCard("Volume total", f"{sys_stats['total_data_mo']:.1f} Mo", "💾"))
-                admin_cards.addWidget(MetricCard("Total datasets", str(sys_stats["total_datasets"]), "🗄️"))
-                admin_cards.addWidget(MetricCard("Total rapports", str(sys_stats["total_reports"]), "📋"))
-                layout.addLayout(admin_cards)
-            except Exception:
-                pass
+        sys_stats = data.get("sys_stats")
+        if self._role == "admin" and sys_stats:
+            layout.addWidget(SubSectionTitle("Statistiques systeme", "\u2302"))
+            admin_cards = QHBoxLayout()
+            admin_cards.setSpacing(15)
+            admin_cards.addWidget(MetricCard("Utilisateurs actifs", str(sys_stats["active_users"]), "\u263a"))
+            admin_cards.addWidget(MetricCard("Volume total", f"{sys_stats['total_data_mo']:.1f} Mo", "\u25cb"))
+            admin_cards.addWidget(MetricCard("Total datasets", str(sys_stats["total_datasets"]), "\u25a6"))
+            admin_cards.addWidget(MetricCard("Total rapports", str(sys_stats["total_reports"]), "\u2261"))
+            layout.addLayout(admin_cards)
             layout.addWidget(Separator())
 
         # Activity Timeline
-        layout.addWidget(SubSectionTitle("Activite recente", "🕐"))
-        self._add_activity_timeline(layout)
+        layout.addWidget(SubSectionTitle("Activite recente", "\u25cb"))
+        logs = data.get("logs", [])
+        self._add_activity_timeline(layout, logs)
         layout.addWidget(Separator())
 
         # Quick Actions
-        layout.addWidget(SubSectionTitle("Actions rapides", "⚡"))
+        layout.addWidget(SubSectionTitle("Actions rapides", "\u25ba"))
         self._add_quick_actions(layout)
 
         layout.addStretch()
@@ -407,7 +518,7 @@ class MainWindow(QMainWindow):
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-            import numpy as np
+            import numpy as np  # noqa: F401
 
             recent = sorted(datasets, key=lambda d: d.cree_le or "", reverse=True)[:3]
 
@@ -417,35 +528,30 @@ class MainWindow(QMainWindow):
             for ds in recent:
                 quality = 95 if ds.statut == "traite" else 70 if ds.statut == "en_traitement" else 50
 
-                fig, ax = plt.subplots(figsize=(2.5, 2), subplot_kw={"projection": "polar"})
-                fig.patch.set_facecolor("#f8f9fc")
+                # Use a standard (non-polar) horizontal bar gauge
+                fig, ax = plt.subplots(figsize=(3, 1.8))
+                fig.patch.set_facecolor("#ffffff")
 
-                # Create gauge
-                theta = np.linspace(0, np.pi, 100)
-                ax.set_theta_zero_location("W")
-                ax.set_theta_direction(-1)
-
-                # Background arc
-                ax.barh(1, np.pi, height=0.3, left=0, color="#e8e8e8", alpha=0.5)
-                # Value arc
-                value_angle = np.pi * quality / 100
+                # Background bar
+                ax.barh(0, 100, height=0.5, color="#e8e8e8", edgecolor="none")
+                # Value bar
                 color = "#93DC5C" if quality >= 75 else "#f59e0b" if quality >= 50 else "#ef4444"
-                ax.barh(1, value_angle, height=0.3, left=0, color=color)
+                ax.barh(0, quality, height=0.5, color=color, edgecolor="none")
 
-                ax.set_ylim(0, 2)
-                ax.set_xlim(0, np.pi)
+                # Percentage text centered on the bar
+                ax.text(50, 0, f"{quality}%", ha="center", va="center",
+                        fontsize=20, fontweight="bold", color="#31333f")
+
+                ax.set_xlim(0, 100)
+                ax.set_ylim(-0.8, 0.8)
                 ax.axis("off")
 
-                # Center text
-                ax.text(np.pi / 2, 0.5, f"{quality}%", ha="center", va="center",
-                        fontsize=18, fontweight="bold", color="#31333f",
-                        transform=ax.transAxes)
-
-                ax.set_title(ds.nom[:20], fontsize=10, color="#31333f", pad=5)
+                ax.set_title(ds.nom[:20], fontsize=10, color="#31333f", pad=8)
+                fig.tight_layout(pad=0.5)
 
                 canvas = FigureCanvas(fig)
-                canvas.setFixedHeight(160)
-                canvas.setStyleSheet("background-color: #f8f9fc; border: none;")
+                canvas.setFixedHeight(140)
+                canvas.setStyleSheet("background-color: white; border: none;")
 
                 card = QFrame()
                 card.setStyleSheet("""
@@ -472,66 +578,52 @@ class MainWindow(QMainWindow):
         except Exception:
             layout.addWidget(QLabel("Impossible de charger les graphiques de qualite."))
 
-    def _add_activity_timeline(self, layout: QVBoxLayout) -> None:
-        """Add the activity timeline from audit logs."""
-        try:
-            from app.Repositories.audit_repository import AuditRepository
-            audit_repo = AuditRepository()
-
-            if self._role == "admin":
-                logs = audit_repo.find_recent(limit=8)
-            else:
-                logs = audit_repo.find_by_user(self._user_id)[:8]
-
-            if not logs:
-                no_activity = QLabel("Aucune activite recente.")
-                no_activity.setStyleSheet("color: #888; font-style: italic; background: transparent; border: none;")
-                layout.addWidget(no_activity)
-                return
-
-            for log in logs:
-                item_frame = QFrame()
-                item_frame.setStyleSheet("""
-                    QFrame {
-                        border-left: 3px solid #93DC5C;
-                        padding-left: 15px;
-                        margin-left: 10px;
-                        background: transparent;
-                        border-top: none; border-right: none; border-bottom: none;
-                        border-radius: 0;
-                    }
-                """)
-                item_layout = QHBoxLayout(item_frame)
-                item_layout.setContentsMargins(15, 8, 10, 8)
-
-                # Dot
-                dot = QLabel("●")
-                dot_color = "#22c55e" if log.statut == "succes" else "#ef4444"
-                dot.setStyleSheet(f"color: {dot_color}; font-size: 10px; background: transparent; border: none;")
-                dot.setFixedWidth(15)
-                item_layout.addWidget(dot)
-
-                # Text
-                text_layout = QVBoxLayout()
-                action_label = QLabel(log.action)
-                action_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #31333f; background: transparent; border: none;")
-                text_layout.addWidget(action_label)
-
-                timestamp = log.horodatage.strftime("%d/%m/%Y %H:%M") if log.horodatage else "N/A"
-                message = (log.message[:60] + "...") if log.message and len(log.message) > 60 else (log.message or "")
-                meta = QLabel(f"{log.entite} - {timestamp}{f' - {message}' if message else ''}")
-                meta.setStyleSheet("font-size: 11px; color: #94a3b8; background: transparent; border: none;")
-                text_layout.addWidget(meta)
-
-                item_layout.addLayout(text_layout)
-                item_layout.addStretch()
-
-                layout.addWidget(item_frame)
-
-        except Exception:
-            no_activity = QLabel("Activite non disponible.")
-            no_activity.setStyleSheet("color: #888; background: transparent; border: none;")
+    def _add_activity_timeline(self, layout: QVBoxLayout, logs: list) -> None:
+        """Add the activity timeline from pre-fetched audit logs."""
+        if not logs:
+            no_activity = QLabel("Aucune activite recente.")
+            no_activity.setStyleSheet("color: #888; font-style: italic; background: transparent; border: none;")
             layout.addWidget(no_activity)
+            return
+
+        for log in logs:
+            item_frame = QFrame()
+            item_frame.setStyleSheet("""
+                QFrame {
+                    border-left: 3px solid #93DC5C;
+                    padding-left: 15px;
+                    margin-left: 10px;
+                    background: transparent;
+                    border-top: none; border-right: none; border-bottom: none;
+                    border-radius: 0;
+                }
+            """)
+            item_layout = QHBoxLayout(item_frame)
+            item_layout.setContentsMargins(15, 8, 10, 8)
+
+            # Dot
+            dot = QLabel("\u25cf")
+            dot_color = "#22c55e" if log.statut == "succes" else "#ef4444"
+            dot.setStyleSheet(f"color: {dot_color}; font-size: 10px; background: transparent; border: none;")
+            dot.setFixedWidth(15)
+            item_layout.addWidget(dot)
+
+            # Text
+            text_layout = QVBoxLayout()
+            action_label = QLabel(log.action)
+            action_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #31333f; background: transparent; border: none;")
+            text_layout.addWidget(action_label)
+
+            timestamp = log.horodatage.strftime("%d/%m/%Y %H:%M") if log.horodatage else "N/A"
+            message = (log.message[:60] + "...") if log.message and len(log.message) > 60 else (log.message or "")
+            meta = QLabel(f"{log.entite} - {timestamp}{f' - {message}' if message else ''}")
+            meta.setStyleSheet("font-size: 11px; color: #94a3b8; background: transparent; border: none;")
+            text_layout.addWidget(meta)
+
+            item_layout.addLayout(text_layout)
+            item_layout.addStretch()
+
+            layout.addWidget(item_frame)
 
     def _add_quick_actions(self, layout: QVBoxLayout) -> None:
         """Add quick action cards matching Streamlit's design."""
@@ -539,10 +631,10 @@ class MainWindow(QMainWindow):
         actions_layout.setSpacing(15)
 
         actions = [
-            ("📁", "Importer", "CSV, Excel, XLS", 1),
-            ("📊", "Analyser", "Stats, anomalies, IA", 2),
-            ("📄", "Rapports", "PDF et Excel", 3),
-            ("🔀", "Comparer", "Versions de datasets", 4),
+            ("\u2630", "Importer", "CSV, Excel, XLS", 1),
+            ("\u25a6", "Analyser", "Stats, anomalies, IA", 2),
+            ("\u25a1", "Rapports", "PDF et Excel", 3),
+            ("\u21c4", "Comparer", "Versions de datasets", 4),
         ]
 
         for icon, title, desc, page_idx in actions:
@@ -563,7 +655,7 @@ class MainWindow(QMainWindow):
             card_layout.setSpacing(8)
 
             icon_lbl = QLabel(icon)
-            icon_lbl.setStyleSheet("font-size: 32px; background: transparent; border: none;")
+            icon_lbl.setStyleSheet("font-size: 32px; background: transparent; border: none; color: #93DC5C;")
             icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             card_layout.addWidget(icon_lbl)
 
@@ -606,10 +698,11 @@ class MainWindow(QMainWindow):
         """Handle logout."""
         from app.Http.Controllers.auth_controller import AuthController
         auth_ctrl = AuthController()
-        try:
-            auth_ctrl.logout(self._token)
-        except Exception:
-            pass
+        if self._token is not None:
+            try:
+                auth_ctrl.logout(self._token)
+            except Exception:
+                pass
 
         self._token = None
         self._user_id = None
@@ -617,19 +710,21 @@ class MainWindow(QMainWindow):
         self._nom = None
 
         self._sidebar.setVisible(False)
-        self._status_bar.showMessage("Déconnecté")
+        self._stack.setVisible(False)
+        self._clear_pages()
+        self._status_bar.showMessage("Deconnecte")
         self._show_login()
 
     def _show_about(self) -> None:
         """Show about dialog."""
         QMessageBox.about(
             self,
-            "À propos",
+            "A propos",
             "Universal Data Analyzer v1.0\n\n"
-            "Plateforme d'analyse de données avec:\n"
+            "Plateforme d'analyse de donnees avec:\n"
             "- Pipeline ETL (CSV/Excel)\n"
             "- Statistiques descriptives\n"
-            "- Détection d'anomalies\n"
+            "- Detection d'anomalies\n"
             "- Insights IA (Gemini)\n"
             "- Rapports PDF/Excel\n\n"
             "Architecture MVC 5 couches",
@@ -688,7 +783,7 @@ def main() -> None:
     """)
 
     window = MainWindow()
-    window.show()
+    # Window stays hidden until login succeeds (see _on_login_success)
 
     sys.exit(app.exec())
 

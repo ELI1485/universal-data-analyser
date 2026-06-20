@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 from app.Http.Controllers.admin_controller import AdminController
 from app.Services.auth_service import generer_mot_de_passe_temporaire
@@ -34,7 +34,7 @@ class AdminWidget(QWidget):
         self._admin_ctrl = AdminController()
 
         self._setup_ui()
-        self.refresh_data()
+        QTimer.singleShot(0, self.refresh_data)
 
     def _setup_ui(self) -> None:
         """Set up the admin UI components."""
@@ -49,7 +49,7 @@ class AdminWidget(QWidget):
         layout.setSpacing(12)
 
         # Title
-        layout.addWidget(SectionTitle("Administration", "⚙️"))
+        layout.addWidget(SectionTitle("Administration", "\u2699"))
         layout.addWidget(Separator())
 
         # Tabs
@@ -60,7 +60,7 @@ class AdminWidget(QWidget):
         stats_layout = QVBoxLayout(stats_widget)
         stats_layout.setContentsMargins(15, 15, 15, 15)
 
-        stats_layout.addWidget(SubSectionTitle("Statistiques systeme", "🏢"))
+        stats_layout.addWidget(SubSectionTitle("Statistiques systeme", "\u2302"))
         
         self._kpi_layout = QHBoxLayout()
         self._kpi_layout.setSpacing(10)
@@ -75,10 +75,10 @@ class AdminWidget(QWidget):
         users_layout.setContentsMargins(15, 15, 15, 15)
 
         header_layout = QHBoxLayout()
-        header_layout.addWidget(SubSectionTitle("Gestion des utilisateurs", "👥"))
+        header_layout.addWidget(SubSectionTitle("Gestion des utilisateurs", "\u263a"))
         header_layout.addStretch()
 
-        self._btn_refresh = QPushButton("🔄 Actualiser")
+        self._btn_refresh = QPushButton("\u21bb Actualiser")
         self._btn_refresh.setStyleSheet("""
             QPushButton { background-color: #f0f2f6; color: #31333f; border-radius: 6px; padding: 6px 12px; font-weight: bold; border: 1px solid #e0e0e0; }
             QPushButton:hover { background-color: #e0e4eb; }
@@ -97,7 +97,7 @@ class AdminWidget(QWidget):
         users_layout.addWidget(self._user_table)
 
         users_layout.addWidget(Separator())
-        users_layout.addWidget(SubSectionTitle("Creer un utilisateur", "➕"))
+        users_layout.addWidget(SubSectionTitle("Creer un utilisateur", "+"))
 
         form_frame = QFrame()
         form_frame.setStyleSheet("QFrame { background: white; border-radius: 8px; border: 1px solid #e0e0e0; padding: 15px; }")
@@ -148,7 +148,7 @@ class AdminWidget(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        layout.addWidget(SubSectionTitle("Logs d'audit", "📜"))
+        layout.addWidget(SubSectionTitle("Logs d'audit", "\u2263"))
 
         self._audit_table = QTableWidget()
         self._audit_table.setColumnCount(6)
@@ -163,7 +163,7 @@ class AdminWidget(QWidget):
         layout.addWidget(self._audit_table)
 
         layout.addWidget(Separator())
-        layout.addWidget(SubSectionTitle("Logs d'erreurs", "❌"))
+        layout.addWidget(SubSectionTitle("Logs d'erreurs", "\u2717"))
 
         self._error_table = QTableWidget()
         self._error_table.setColumnCount(3)
@@ -183,10 +183,10 @@ class AdminWidget(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        layout.addWidget(SubSectionTitle("Configuration", "⚙️"))
+        layout.addWidget(SubSectionTitle("Configuration", "\u2699"))
 
         # LLM section
-        layout.addWidget(SubSectionTitle("LLM (Gemini)", "🤖"))
+        layout.addWidget(SubSectionTitle("LLM (Gemini)", "\u2318"))
         try:
             from config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
         except Exception:
@@ -213,7 +213,7 @@ class AdminWidget(QWidget):
         layout.addWidget(llm_frame)
 
         # Anomaly thresholds section
-        layout.addWidget(SubSectionTitle("Seuils de detection d'anomalies", "📏"))
+        layout.addWidget(SubSectionTitle("Seuils de detection d'anomalies", "\u2500"))
         thr_frame = QFrame()
         thr_frame.setStyleSheet("QFrame { background: white; border-radius: 8px; border: 1px solid #e0e0e0; padding: 12px; }")
         thr_layout = QVBoxLayout(thr_frame)
@@ -307,10 +307,10 @@ class AdminWidget(QWidget):
             # Stats
             stats = self._admin_ctrl.get_statistiques_systeme()
             self._clear_layout(self._kpi_layout)
-            self._kpi_layout.addWidget(MetricCard("Utilisateurs totaux", str(stats["total_users"]), "👥"))
-            self._kpi_layout.addWidget(MetricCard("Analyses effectuees", str(stats["total_analyses"]), "📈"))
-            self._kpi_layout.addWidget(MetricCard("Rapports generes", str(stats["total_reports"]), "📄"))
-            self._kpi_layout.addWidget(MetricCard("Volume de donnees", f"{stats['total_data_mo']:.1f} Mo", "💾"))
+            self._kpi_layout.addWidget(MetricCard("Utilisateurs totaux", str(stats["total_users"]), "\u263a"))
+            self._kpi_layout.addWidget(MetricCard("Analyses effectuees", str(stats["total_analyses"]), "\u2197"))
+            self._kpi_layout.addWidget(MetricCard("Rapports generes", str(stats["total_reports"]), "\u25a1"))
+            self._kpi_layout.addWidget(MetricCard("Volume de donnees", f"{stats['total_data_mo']:.1f} Mo", "\u25cb"))
 
             # Users
             users = self._admin_ctrl.lister_utilisateurs()
@@ -332,17 +332,17 @@ class AdminWidget(QWidget):
                 action_layout = QHBoxLayout(action_widget)
                 action_layout.setContentsMargins(0, 0, 0, 0)
 
-                deact_btn = QPushButton("⏸️")
+                deact_btn = QPushButton("\u23f8")
                 deact_btn.setToolTip("Désactiver")
                 deact_btn.setFixedSize(30, 30)
                 deact_btn.clicked.connect(lambda checked, uid=user.id: self._on_deactivate(uid))
 
-                reset_btn = QPushButton("🔑")
+                reset_btn = QPushButton("K")
                 reset_btn.setToolTip("Réinitialiser mot de passe")
                 reset_btn.setFixedSize(30, 30)
                 reset_btn.clicked.connect(lambda checked, uid=user.id: self._on_reset(uid))
 
-                del_btn = QPushButton("🗑️")
+                del_btn = QPushButton("\u2717")
                 del_btn.setToolTip("Supprimer")
                 del_btn.setFixedSize(30, 30)
                 del_btn.clicked.connect(lambda checked, uid=user.id: self._on_delete(uid))

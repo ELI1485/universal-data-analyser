@@ -22,20 +22,20 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QSpinBox,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
+
+from app.Http.Controllers.report_controller import ReportController
+from app.Http.Controllers.upload_controller import UploadController
+from resources.views.pyside.style_widgets import SectionTitle, SubSectionTitle, Separator
 
 # Diagram options offered to the user (kept in sync with the Streamlit page).
 CHART_OPTIONS = [
     "Histogramme de distribution",
     "Anomalies par algorithme",
-    "Matrice de corrélation",
-    "Boîte à moustaches (Boxplot)",
-    "Distribution catégorielle",
+    "Matrice de correlation",
+    "Boite a moustaches (Boxplot)",
+    "Distribution categorielle",
 ]
-
-from app.Http.Controllers.report_controller import ReportController
-from app.Http.Controllers.upload_controller import UploadController
-from resources.views.pyside.style_widgets import SectionTitle, SubSectionTitle, Separator
 
 
 class ReportWorker(QThread):
@@ -97,7 +97,7 @@ class ReportWidget(QWidget):
         self._last_report_path = None
         self._worker = None
         self._setup_ui()
-        self._load_data()
+        QTimer.singleShot(0, self._load_data)
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
@@ -112,7 +112,7 @@ class ReportWidget(QWidget):
         layout.setSpacing(12)
 
         # Title
-        layout.addWidget(SectionTitle("Rapports", "📄"))
+        layout.addWidget(SectionTitle("Rapports", "\u25a1"))
         layout.addWidget(Separator())
 
         # Generate section
@@ -207,7 +207,7 @@ class ReportWidget(QWidget):
         layout.addWidget(Separator())
 
         # Past reports table
-        layout.addWidget(SubSectionTitle("Rapports precedents", "📋"))
+        layout.addWidget(SubSectionTitle("Rapports precedents", "\u2261"))
 
         self._table = QTableWidget()
         self._table.setColumnCount(4)

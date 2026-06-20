@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QFrame,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 
 from app.Http.Controllers.upload_controller import UploadController
 from resources.views.pyside.style_widgets import SectionTitle, SubSectionTitle, Separator
@@ -69,7 +69,7 @@ class UploadWidget(QWidget):
         self._selected_file = ""
         self._worker = None
         self._setup_ui()
-        self._load_datasets()
+        QTimer.singleShot(0, self._load_datasets)
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
@@ -84,7 +84,7 @@ class UploadWidget(QWidget):
         layout.setSpacing(12)
 
         # Title
-        layout.addWidget(SectionTitle("Importer des donnees", "📁"))
+        layout.addWidget(SectionTitle("Importer des donnees", "\u2630"))
         layout.addWidget(Separator())
 
         layout.addWidget(SubSectionTitle("Charger un fichier"))
@@ -140,7 +140,7 @@ class UploadWidget(QWidget):
         layout.addWidget(Separator())
 
         # Datasets table
-        layout.addWidget(SubSectionTitle("Mes datasets", "📋"))
+        layout.addWidget(SubSectionTitle("Mes datasets", "\u2261"))
 
         self._table = QTableWidget()
         self._table.setColumnCount(5)
@@ -236,8 +236,11 @@ class UploadWidget(QWidget):
             QMessageBox.warning(self, "Attention", "Sélectionnez un dataset à supprimer.")
             return
 
-        dataset_id = self._table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-        dataset_name = self._table.item(row, 0).text()
+        name_item = self._table.item(row, 0)
+        if name_item is None:
+            return
+        dataset_id = name_item.data(Qt.ItemDataRole.UserRole)
+        dataset_name = name_item.text()
 
         reply = QMessageBox.question(
             self,

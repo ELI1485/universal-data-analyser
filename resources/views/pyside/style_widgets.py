@@ -11,7 +11,7 @@ class MetricCard(QFrame):
     rounded, shadowed card.
     """
 
-    def __init__(self, label: str, value: str, icon: str = "📊", parent=None) -> None:
+    def __init__(self, label: str, value: str, icon: str = "\u25a6", parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("MetricCard")
         self.setStyleSheet("""

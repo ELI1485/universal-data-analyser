@@ -18,10 +18,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QScrollArea,
-    QFrame,
     QTabWidget,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 
 from app.Http.Controllers.comparison_controller import ComparisonController
 from app.Http.Controllers.upload_controller import UploadController
@@ -77,7 +76,7 @@ class ComparisonWidget(QWidget):
         self._upload_ctrl = UploadController()
         self._worker = None
         self._setup_ui()
-        self._load_data()
+        QTimer.singleShot(0, self._load_data)
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
@@ -91,7 +90,7 @@ class ComparisonWidget(QWidget):
         layout.setContentsMargins(30, 20, 30, 20)
         layout.setSpacing(12)
 
-        layout.addWidget(SectionTitle("Comparaison de datasets", "🔀"))
+        layout.addWidget(SectionTitle("Comparaison de datasets", "\u21c4"))
         layout.addWidget(Separator())
 
         # Dataset selectors
@@ -224,6 +223,8 @@ class ComparisonWidget(QWidget):
         """Remove all widgets from the results container."""
         while self._results_layout.count():
             item = self._results_layout.takeAt(0)
+            if item is None:
+                break
             widget = item.widget()
             if widget:
                 widget.deleteLater()
@@ -236,6 +237,8 @@ class ComparisonWidget(QWidget):
             return
         while layout.count():
             item = layout.takeAt(0)
+            if item is None:
+                break
             widget = item.widget()
             if widget:
                 widget.deleteLater()
@@ -252,22 +255,22 @@ class ComparisonWidget(QWidget):
         anomalies = result.get("anomalies_comparison", {})
 
         # Overview cards
-        self._results_layout.addWidget(SubSectionTitle("Vue d'ensemble", "📊"))
+        self._results_layout.addWidget(SubSectionTitle("Vue d'ensemble", "\u25a6"))
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(15)
         diff_lignes = taille.get("diff_lignes", 0)
         diff_colonnes = taille.get("diff_colonnes", 0)
         cards_layout.addWidget(
-            MetricCard("Diff. lignes", f"{'+' if diff_lignes >= 0 else ''}{diff_lignes}", "↕️")
+            MetricCard("Diff. lignes", f"{'+' if diff_lignes >= 0 else ''}{diff_lignes}", "\u2195")
         )
         cards_layout.addWidget(
-            MetricCard("Diff. colonnes", f"{'+' if diff_colonnes >= 0 else ''}{diff_colonnes}", "🧮")
+            MetricCard("Diff. colonnes", f"{'+' if diff_colonnes >= 0 else ''}{diff_colonnes}", "#")
         )
         cards_layout.addWidget(
-            MetricCard("Colonnes ajoutees", str(schema.get("nb_ajoutees", 0)), "➕")
+            MetricCard("Colonnes ajoutees", str(schema.get("nb_ajoutees", 0)), "+")
         )
         cards_layout.addWidget(
-            MetricCard("Colonnes supprimees", str(schema.get("nb_supprimees", 0)), "➖")
+            MetricCard("Colonnes supprimees", str(schema.get("nb_supprimees", 0)), "\u2212")
         )
         self._results_layout.addLayout(cards_layout)
 
@@ -286,7 +289,7 @@ class ComparisonWidget(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        layout.addWidget(SubSectionTitle("Changements de schema", "🛠️"))
+        layout.addWidget(SubSectionTitle("Changements de schema", "\u2692"))
 
         ajoutees = schema.get("colonnes_ajoutees", [])
         supprimees = schema.get("colonnes_supprimees", [])
@@ -340,7 +343,7 @@ class ComparisonWidget(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        layout.addWidget(SubSectionTitle("Drift statistique", "📈"))
+        layout.addWidget(SubSectionTitle("Drift statistique", "\u2197"))
 
         if not drift:
             info = QLabel("Aucune colonne numerique commune pour analyser le drift.")
@@ -352,7 +355,7 @@ class ComparisonWidget(QWidget):
         significant = [d for d in drift if d.get("drift_significatif")]
         if significant:
             warn = QLabel(
-                f"⚠️ {len(significant)} colonne(s) avec drift significatif detecte(s) "
+                f"\u26a0 {len(significant)} colonne(s) avec drift significatif detecte(s) "
                 "(shift de la moyenne > 1 ecart-type)."
             )
             warn.setStyleSheet("color: #f59e0b; background: transparent; border: none; font-weight: bold;")
@@ -427,31 +430,31 @@ class ComparisonWidget(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        layout.addWidget(SubSectionTitle("Comparaison des anomalies", "⚠️"))
+        layout.addWidget(SubSectionTitle("Comparaison des anomalies", "\u26a0"))
 
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(15)
         ancien_total = anomalies.get("ancien_total", 0)
         nouveau_total = anomalies.get("nouveau_total", 0)
         diff = anomalies.get("diff", 0)
-        cards_layout.addWidget(MetricCard("Anomalies (ancien)", str(ancien_total), "❗"))
-        cards_layout.addWidget(MetricCard("Anomalies (nouveau)", str(nouveau_total), "❗"))
+        cards_layout.addWidget(MetricCard("Anomalies (ancien)", str(ancien_total), "!"))
+        cards_layout.addWidget(MetricCard("Anomalies (nouveau)", str(nouveau_total), "!"))
         if anomalies.get("amelioration"):
-            cards_layout.addWidget(MetricCard("Evolution", f"-{abs(diff)}", "📉"))
+            cards_layout.addWidget(MetricCard("Evolution", f"-{abs(diff)}", "\u2198"))
         else:
             cards_layout.addWidget(
-                MetricCard("Evolution", f"{'+' if diff > 0 else ''}{diff}", "📈")
+                MetricCard("Evolution", f"{'+' if diff > 0 else ''}{diff}", "\u2197")
             )
         layout.addLayout(cards_layout)
 
         if anomalies.get("amelioration"):
             msg = QLabel(
-                f"✅ Amelioration: {abs(diff)} anomalies en moins dans le nouveau dataset."
+                f"\u2713 Amelioration: {abs(diff)} anomalies en moins dans le nouveau dataset."
             )
             msg.setStyleSheet("color: #16a34a; background: transparent; border: none; font-weight: bold;")
         elif diff > 0:
             msg = QLabel(
-                f"⚠️ Attention: {diff} anomalies supplementaires detectees dans le nouveau dataset."
+                f"\u26a0 Attention: {diff} anomalies supplementaires detectees dans le nouveau dataset."
             )
             msg.setStyleSheet("color: #f59e0b; background: transparent; border: none; font-weight: bold;")
         else:

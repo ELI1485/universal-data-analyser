@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QDialog,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 
 import os
 
@@ -89,7 +89,7 @@ class AnalyticsWidget(QWidget):
         self._viz_df = None  # DataFrame loaded for the Visualisations tab
         self._viz_figures = []  # Track matplotlib figures to close on refresh
         self._setup_ui()
-        self._load_datasets()
+        QTimer.singleShot(0, self._load_datasets)
 
     def _setup_ui(self) -> None:
         """Set up the widget UI components."""
@@ -104,7 +104,7 @@ class AnalyticsWidget(QWidget):
         layout.setSpacing(12)
 
         # Title
-        layout.addWidget(SectionTitle("Analyses", "📈"))
+        layout.addWidget(SectionTitle("Analyses", "\u2197"))
         layout.addWidget(Separator())
 
         # Dataset selector
@@ -165,7 +165,7 @@ class AnalyticsWidget(QWidget):
         self._kpi_layout.setSpacing(10)
         stats_layout.addLayout(self._kpi_layout)
 
-        stats_layout.addWidget(SubSectionTitle("Colonnes numeriques", "🔢"))
+        stats_layout.addWidget(SubSectionTitle("Colonnes numeriques", "#"))
         self._stats_table = QTableWidget()
         self._stats_table.setColumnCount(8)
         self._stats_table.setHorizontalHeaderLabels(
@@ -177,7 +177,7 @@ class AnalyticsWidget(QWidget):
         self._stats_table.setAlternatingRowColors(True)
         stats_layout.addWidget(self._stats_table)
 
-        stats_layout.addWidget(SubSectionTitle("Colonnes categorielles", "🏷️"))
+        stats_layout.addWidget(SubSectionTitle("Colonnes categorielles", "\u2606"))
         self._cat_table = QTableWidget()
         self._cat_table.setColumnCount(4)
         self._cat_table.setHorizontalHeaderLabels(
@@ -364,10 +364,10 @@ class AnalyticsWidget(QWidget):
         self._clear_layout(self._kpi_layout)
         kpis = analytics.get("kpis", {})
         if kpis:
-            self._kpi_layout.addWidget(MetricCard("Total Lignes", str(kpis.get("total_rows", "N/A")), "📋"))
-            self._kpi_layout.addWidget(MetricCard("Total Colonnes", str(kpis.get("total_columns", "N/A")), "📊"))
-            self._kpi_layout.addWidget(MetricCard("Completude", f"{kpis.get('completeness_rate', 0):.1f}%", "✅"))
-            self._kpi_layout.addWidget(MetricCard("Memoire", f"{kpis.get('memory_usage_mb', 0):.2f} Mo", "💾"))
+            self._kpi_layout.addWidget(MetricCard("Total Lignes", str(kpis.get("total_rows", "N/A")), "\u2261"))
+            self._kpi_layout.addWidget(MetricCard("Total Colonnes", str(kpis.get("total_columns", "N/A")), "\u25a6"))
+            self._kpi_layout.addWidget(MetricCard("Completude", f"{kpis.get('completeness_rate', 0):.1f}%", "\u2713"))
+            self._kpi_layout.addWidget(MetricCard("Memoire", f"{kpis.get('memory_usage_mb', 0):.2f} Mo", "\u25cb"))
 
         stats = analytics.get("statistiques", {}).get("colonnes", {})
 
@@ -408,10 +408,10 @@ class AnalyticsWidget(QWidget):
         total = anomalies.get("total", 0)
         resume = anomalies.get("resume", {})
 
-        self._anom_kpi_layout.addWidget(MetricCard("Total Anomalies", str(total), "⚠️"))
-        self._anom_kpi_layout.addWidget(MetricCard("Z-Score", str(resume.get("zscore_count", 0)), "📊"))
-        self._anom_kpi_layout.addWidget(MetricCard("IQR", str(resume.get("iqr_count", 0)), "🔍"))
-        self._anom_kpi_layout.addWidget(MetricCard("Isolation Forest", str(resume.get("isolation_count", 0)), "🌳"))
+        self._anom_kpi_layout.addWidget(MetricCard("Total Anomalies", str(total), "\u26a0"))
+        self._anom_kpi_layout.addWidget(MetricCard("Z-Score", str(resume.get("zscore_count", 0)), "\u25a6"))
+        self._anom_kpi_layout.addWidget(MetricCard("IQR", str(resume.get("iqr_count", 0)), "\u25ce"))
+        self._anom_kpi_layout.addWidget(MetricCard("Isolation Forest", str(resume.get("isolation_count", 0)), "\u2742"))
 
         all_anom = (
             anomalies.get("zscore", [])

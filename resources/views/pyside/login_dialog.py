@@ -1,14 +1,13 @@
 """PySide6 login dialog for user authentication."""
 
 import sys
-import urllib.request
 from pathlib import Path
 
 _project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from PySide6.QtWidgets import (
+from PySide6.QtWidgets import (  # noqa: E402
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -20,10 +19,9 @@ from PySide6.QtWidgets import (
     QFrame,
     QCheckBox,
 )
-from PySide6.QtCore import Signal, Qt, QPoint
-from PySide6.QtGui import QFont, QPixmap, QColor
+from PySide6.QtCore import Signal, Qt, QPoint  # noqa: E402
 
-from app.Http.Controllers.auth_controller import AuthController
+from app.Http.Controllers.auth_controller import AuthController  # noqa: E402
 
 
 class LoginDialog(QDialog):
@@ -85,16 +83,8 @@ class LoginDialog(QDialog):
         # 1. Background image
         bg_label = QLabel()
         bg_label.setScaledContents(True)
-        try:
-            url = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop"
-            # Setting a 3 second timeout so the UI doesn't hang if offline
-            data = urllib.request.urlopen(url, timeout=3).read()
-            pixmap = QPixmap()
-            pixmap.loadFromData(data)
-            bg_label.setPixmap(pixmap)
-        except Exception:
-            # Fallback to green gradient
-            bg_label.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #93DC5C, stop:1 #4e732d); border-top-left-radius: 20px; border-bottom-left-radius: 20px;")
+        # Use safe local gradient instead of relying on external Unsplash image which can hang the UI
+        bg_label.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #93DC5C, stop:1 #4e732d); border-top-left-radius: 20px; border-bottom-left-radius: 20px;")
         
         left_layout.addWidget(bg_label, 0, 0)
         
@@ -115,8 +105,8 @@ class LoginDialog(QDialog):
         logo_layout = QVBoxLayout(logo_box)
         logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        icon_label = QLabel("📊") # Fallback icon 
-        icon_label.setStyleSheet("font-size: 60px; background: transparent;")
+        icon_label = QLabel("\u25a6")
+        icon_label.setStyleSheet("font-size: 60px; background: transparent; color: white;")
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo_layout.addWidget(icon_label)
         
